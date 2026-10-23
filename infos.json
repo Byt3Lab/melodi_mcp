@@ -1,0 +1,10 @@
+{
+  "name": "melodi_mcp",
+  "title": "MELODI MCP",
+  "version": "1.0.0",
+  "description": "Fournisseur interne d'outils et capacités pour assistants IA via le protocole MCP.",
+  "author": "BYT3LAB",
+  "depends": [
+    "base"
+  ]
+}
