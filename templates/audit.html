@@ -1,0 +1,104 @@
+<div class="ds-container-fluid p-4">
+  <!-- En-tête de page -->
+  <div class="ds-flex ds-items-center ds-justify-between mb-4">
+    <div>
+      <h1 class="ds-h2 mb-1">{{ t('audit_title', 'Historique Complet des Exécutions MCP') }}</h1>
+      <p class="ds-text-muted mb-0">{{ t('audit_subtitle', 'Traçabilité et audit en temps réel de tous les outils appelés par les assistants IA') }}</p>
+    </div>
+    <div class="ds-flex ds-items-center ds-gap-2">
+      <a href="/admin/melodi_mcp" class="ds-btn ds-btn-sm ds-btn-secondary">
+        ← {{ t('catalog_tab', 'Catalogue des Outils') }}
+      </a>
+      <a href="/admin/melodi_mcp/keys" class="ds-btn ds-btn-sm ds-btn-outline-primary">
+        {{ t('nav_keys', 'Clés d\'API & Sécurité') }}
+      </a>
+      <a href="/admin/melodi_mcp/manifest" class="ds-btn ds-btn-sm ds-btn-secondary">
+        {{ t('nav_manifest', 'Serveur & Manifeste') }} →
+      </a>
+    </div>
+  </div>
+
+  <!-- Barre de filtrage -->
+  <div class="ds-card p-3 mb-4">
+    <form method="GET" class="ds-flex ds-flex-wrap ds-gap-3 ds-items-center">
+      <div class="ds-flex-1" style="min-width: 250px;">
+        <select name="tool" class="ds-select w-100">
+          <option value="">{{ t('all_tools_filter', 'Tous les outils') }}</option>
+          {% for tn in available_tools %}
+            <option value="{{ tn }}" {% if filter_tool == tn %}selected{% endif %}>{{ tn }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <select name="status" class="ds-select">
+          <option value="">{{ t('all_statuses', 'Tous les statuts') }}</option>
+          <option value="SUCCESS" {% if filter_status == 'SUCCESS' %}selected{% endif %}>{{ t('status_success', 'Succès') }}</option>
+          <option value="REJECTED" {% if filter_status == 'REJECTED' %}selected{% endif %}>{{ t('status_rejected', 'Rejeté') }}</option>
+          <option value="TIMEOUT" {% if filter_status == 'TIMEOUT' %}selected{% endif %}>{{ t('status_timeout', 'Timeout') }}</option>
+          <option value="FAILED" {% if filter_status == 'FAILED' %}selected{% endif %}>{{ t('status_failed', 'Échoué') }}</option>
+        </select>
+      </div>
+      <button type="submit" class="ds-btn ds-btn-primary">{{ t('filter_button', 'Filtrer') }}</button>
+      <a href="/admin/melodi_mcp/audit" class="ds-btn ds-btn-secondary">{{ t('reset_button', 'Réinitialiser') }}</a>
+    </form>
+  </div>
+
+  <!-- Tableau des journaux d'audit -->
+  <div class="ds-card">
+    <div class="ds-card-header ds-flex ds-items-center ds-justify-between p-3 border-bottom">
+      <h3 class="ds-h4 mb-0">{{ t('recent_executions', 'Journal d\'Audit des Exécutions') }}</h3>
+      <span class="ds-badge ds-badge-primary">{{ logs|length }}</span>
+    </div>
+    <div class="ds-table-responsive">
+      <table class="ds-table w-100">
+        <thead>
+          <tr>
+            <th>{{ t('timestamp', 'Date & Heure') }}</th>
+            <th>{{ t('tool_name', 'Nom de l\'outil') }}</th>
+            <th>{{ t('module', 'Module') }}</th>
+            <th>{{ t('user', 'Utilisateur') }}</th>
+            <th>{{ t('branch', 'Agence') }}</th>
+            <th>{{ t('duration', 'Durée') }}</th>
+            <th>{{ t('execution_status', 'Résultat') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if logs %}
+            {% for log in logs %}
+              <tr>
+                <td class="ds-text-sm">{{ log.created_at or '-' }}</td>
+                <td>
+                  <strong>{{ log.tool_name }}</strong>
+                  {% if log.correlation_id %}
+                    <div class="ds-text-muted ds-text-xs">ID: <code>{{ log.correlation_id }}</code></div>
+                  {% endif %}
+                </td>
+                <td><span class="ds-badge ds-badge-light">{{ log.module_name }}</span></td>
+                <td>{{ log.user_id or '-' }}</td>
+                <td>{{ log.branch_id or '-' }}</td>
+                <td><code>{{ log.duration_ms }} ms</code></td>
+                <td>
+                  {% if log.status == 'SUCCESS' %}
+                    <span class="ds-badge ds-badge-success">{{ t('status_success', 'Succès') }}</span>
+                  {% elif log.status == 'REJECTED' %}
+                    <span class="ds-badge ds-badge-warning">{{ t('status_rejected', 'Rejeté') }} ({{ log.error_code or '' }})</span>
+                  {% elif log.status == 'TIMEOUT' %}
+                    <span class="ds-badge ds-badge-danger">{{ t('status_timeout', 'Timeout') }}</span>
+                  {% else %}
+                    <span class="ds-badge ds-badge-danger">{{ t('status_failed', 'Échoué') }} ({{ log.error_code or '' }})</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="7" class="text-center py-5 ds-text-muted">
+                {{ t('no_logs', 'Aucune exécution enregistrée pour ces critères.') }}
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

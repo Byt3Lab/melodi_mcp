@@ -1,0 +1,66 @@
+<div class="p-4 h-100 d-flex flex-column justify-content-between" style="background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);">
+  <!-- Widget Header -->
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div class="d-flex align-items-center gap-2.5">
+      <div class="p-2.5 rounded-3 d-inline-flex align-items-center justify-content-center shadow-xs"
+           style="width: 42px; height: 42px; background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);">
+        <img src="/static_base_icons?name=smart_toy&fill=3730a3" style="width: 22px; height: 22px;" alt="MCP">
+      </div>
+      <div>
+        <h6 class="mb-0 fw-bold text-dark fs-6">{{ t('mcp_widget_title', 'Intégration IA & Outils MCP') }}</h6>
+        <span class="text-muted small" style="font-size: 0.78rem;">{{ t('mcp_widget_subtitle', 'Capacités ERP exposées aux assistants d\'IA') }}</span>
+      </div>
+    </div>
+    <span class="badge bg-success-subtle text-success fw-bold px-3 py-1.5 rounded-pill d-inline-flex align-items-center gap-1.5" style="font-size: 0.75rem;">
+      <span style="width: 6px; height: 6px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
+      {{ t('mcp_server_ready', 'Serveur MCP Prêt') }}
+    </span>
+  </div>
+
+  <!-- KPI Metrics Row -->
+  <div class="row g-2.5 mb-3">
+    <div class="col-4">
+      <div class="p-2.5 rounded-3 bg-white border text-center h-100">
+        <span class="text-muted d-block small" style="font-size: 0.7rem;">{{ t('active_tools', 'Outils Actifs') }}</span>
+        <span class="fs-4 fw-bold text-primary">{{ active_tools_count }}</span>
+      </div>
+    </div>
+    <div class="col-4">
+      <div class="p-2.5 rounded-3 bg-white border text-center h-100">
+        <span class="text-muted d-block small" style="font-size: 0.7rem;">{{ t('total_tools', 'Total Outils') }}</span>
+        <span class="fs-4 fw-bold text-dark">{{ total_tools_count }}</span>
+      </div>
+    </div>
+    <div class="col-4">
+      <div class="p-2.5 rounded-3 bg-white border text-center h-100">
+        <span class="text-muted d-block small" style="font-size: 0.7rem;">{{ t('catalog_revision', 'Révision') }}</span>
+        <code class="d-block text-truncate fw-semibold text-secondary mt-1" style="font-size: 0.75rem;">{{ catalog_revision }}</code>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sector breakdown pills -->
+  {% if categories %}
+  <div class="mb-3">
+    <div class="text-muted small mb-1.5" style="font-size: 0.72rem;">{{ t('registered_capabilities', 'Capacités enregistrées') }} :</div>
+    <div class="d-flex flex-wrap gap-1.5">
+      {% for cat, cnt in categories.items() %}
+        <span class="badge bg-light text-dark border px-2 py-1" style="font-size: 0.72rem;">
+          {{ cat }} : <strong>{{ cnt }}</strong>
+        </span>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Widget Footer Action -->
+  <div class="d-flex align-items-center justify-content-between pt-2 border-top">
+    <span class="text-muted small" style="font-size: 0.75rem;">
+      <code>/api/melodi_mcp/internal/...</code>
+    </span>
+    <a href="/admin/melodi_mcp" class="ds-btn ds-btn-primary ds-btn-sm text-decoration-none">
+      <img src="/static_base_icons?name=open_in_new&fill=white" style="width: 13px; height: 13px;" alt="">
+      <span>{{ t('open_catalog', 'Ouvrir le catalogue') }}</span>
+    </a>
+  </div>
+</div>

@@ -27,10 +27,10 @@ class MelodiMCPModule(ApplicationModule):
 
     async def run_dev_migrations(self):
         """Création automatique des tables de stockage du module melodi_mcp."""
-        from .models.models import MCPAuditLogModel
+        from .models.models import MCPAuditLogModel, MCPApiKeyModel
         if self.app and hasattr(self.app, "db") and self.app.db:
             try:
-                await self.app.db.create_all([MCPAuditLogModel])
+                await self.app.db.create_all([MCPAuditLogModel, MCPApiKeyModel])
             except Exception as e:
                 print(f"[melodi_mcp] Erreur lors des migrations dev: {e}")
 
@@ -39,6 +39,10 @@ class MelodiMCPModule(ApplicationModule):
         # 1. Routes d'administration Web
         self.admin_router.add_route("", MCPWebController.admin_dashboard, methods=["GET"])
         self.admin_router.add_route("/", MCPWebController.admin_dashboard, methods=["GET"])
+        self.admin_router.add_route("/audit", MCPWebController.admin_audit, methods=["GET"])
+        self.admin_router.add_route("/keys", MCPWebController.admin_api_keys, methods=["GET", "POST"])
+        self.admin_router.add_route("/api-keys", MCPWebController.admin_api_keys, methods=["GET", "POST"])
+        self.admin_router.add_route("/manifest", MCPWebController.admin_manifest, methods=["GET"])
 
         # 2. Routes API REST internes destinées à melodi_mcp_server
         # Endpoints de santé et manifeste
@@ -81,8 +85,73 @@ class MelodiMCPModule(ApplicationModule):
             label="Outils MCP",
             icon="name=smart_toy&fill=white",
             url="/admin/melodi_mcp",
-            priority=45,
-            required_role="mcp:read"
+            priority=85,
+            children=[
+                {"label": "Catalogue des Outils", "icon": "name=extension&fill=white", "url": "/admin/melodi_mcp"},
+                {"label": "Journal d'Audit", "icon": "name=history&fill=white", "url": "/admin/melodi_mcp/audit"},
+                {"label": "Clés d'API & Sécurité", "icon": "name=key&fill=white", "url": "/admin/melodi_mcp/keys"},
+                {"label": "Serveur & Manifeste", "icon": "name=cloud_sync&fill=white", "url": "/admin/melodi_mcp/manifest"},
+            ]
+        )
+
+    def render_widget_template(self, template_name: str, **context):
+        """Surcharge pour résoudre correctement les templates de widgets situés dans modules/<dirname>/widgets/."""
+        from os.path import join, exists
+        import jinja2
+
+        paths_to_check = []
+        if self.app and hasattr(self.app, "config"):
+            paths_to_check.append(join(self.app.config.PATH_DIR_MODULES, self.dirname or "melodi_mcp", "widgets", f"{template_name}.html"))
+            paths_to_check.append(join(self.app.config.PATH_DIR_RACINE, self.dirname or "melodi_mcp", "widgets", f"{template_name}.html"))
+
+        import pathlib
+        mod_dir = pathlib.Path(__file__).parent.resolve()
+        paths_to_check.append(str(mod_dir / "widgets" / f"{template_name}.html"))
+
+        for path in paths_to_check:
+            if exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    template_str = f.read()
+
+                def _render(**kwargs):
+                    ctx = {"t": self.t, "_": self.t, **context, **kwargs}
+                    if "stats" not in ctx or ctx["stats"] is None:
+                        ctx["stats"] = {}
+                    return jinja2.Template(template_str).render(**ctx)
+
+                return _render
+
+        return super().render_widget_template(template_name, **context)
+
+    def _register_dashboard_widget(self):
+        """Enregistre le widget MCP sur le tableau de bord principal de MELODI."""
+        from .config import CONTRACT_VERSION
+
+        def widget_renderer():
+            registry = ToolRegistry.get_instance(app=self.app)
+            tools = registry.list_tools(enabled_only=False, check_module_active=False)
+            active_tools = [t for t in tools if t.enabled and registry.is_module_active(t.module)]
+            
+            categories = {}
+            for t in active_tools:
+                categories[t.category] = categories.get(t.category, 0) + 1
+
+            template_func = self.render_widget_template("dashboard_widget", **{
+                "active_tools_count": len(active_tools),
+                "total_tools_count": len(tools),
+                "catalog_revision": registry.get_revision(),
+                "contract_version": CONTRACT_VERSION,
+                "categories": categories,
+            })
+            if template_func:
+                return template_func()
+            return ""
+
+        self.register_dashboard_widget(
+            title="Outils MCP & Intégration IA",
+            component=widget_renderer,
+            dimensions={"w": 4, "h": 2},
+            priority=85,
         )
 
     async def _collect_registry_contributions(self):
@@ -128,9 +197,18 @@ class MelodiMCPModule(ApplicationModule):
         self._register_actions()
         self._register_routes()
         self._register_navigation()
+        self._register_dashboard_widget()
 
         # Collecte initiale des outils enregistrés dans le Registry central
         await self._collect_registry_contributions()
+
+        # Initialisation de la clé de service par défaut si base de données disponible
+        if self.app and hasattr(self.app, "db") and self.app.db:
+            try:
+                from .services.api_key_service import MCPApiKeyService
+                await MCPApiKeyService(app=self.app).ensure_default_key()
+            except Exception as e:
+                print(f"[melodi_mcp] Erreur initialisation clé API par défaut: {e}")
 
         # Notification de disponibilité
         if hasattr(self, "notify_event_listener"):

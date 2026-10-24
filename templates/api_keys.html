@@ -1,0 +1,236 @@
+<div class="ds-container-fluid p-4">
+  <!-- En-tête de page -->
+  <div class="ds-flex ds-items-center ds-justify-between mb-4">
+    <div>
+      <h1 class="ds-h2 mb-1">{{ t('api_keys_title', 'Gestion des Clés d\'API MCP') }}</h1>
+      <p class="ds-text-muted mb-0">{{ t('api_keys_subtitle', 'Contrôlez l\'accès sécurisé des assistants IA et clients MCP externes aux fonctionnalités MELODI') }}</p>
+    </div>
+    <div class="ds-flex ds-items-center ds-gap-2">
+      <a href="/admin/melodi_mcp" class="ds-btn ds-btn-sm ds-btn-secondary">
+        ← {{ t('catalog_tab', 'Catalogue des Outils') }}
+      </a>
+      <a href="/admin/melodi_mcp/audit" class="ds-btn ds-btn-sm ds-btn-secondary">
+        {{ t('nav_audit', 'Journal d\'Audit') }}
+      </a>
+      <a href="/admin/melodi_mcp/manifest" class="ds-btn ds-btn-sm ds-btn-outline-primary">
+        {{ t('nav_manifest', 'Serveur & Manifeste') }} →
+      </a>
+    </div>
+  </div>
+
+  <!-- Alerte Nouvelle Clé Générée -->
+  {% if newly_created_key %}
+  <div class="ds-card p-4 mb-4 border border-success" style="background: rgba(16, 185, 129, 0.06);">
+    <div class="ds-flex ds-items-start ds-justify-between">
+      <div>
+        <h4 class="ds-h4 text-success mb-1">
+          ✓ {{ t('key_generated_success', 'Nouvelle Clé API générée avec succès !') }}
+        </h4>
+        <p class="ds-text-sm ds-text-muted mb-3">
+          {{ t('key_copy_warning', 'Attention : copiez immédiatement cette clé secrète. Pour des raisons de sécurité, sa valeur intégrale ne sera plus réaffichée.') }}
+        </p>
+        <div class="ds-flex ds-items-center ds-gap-2">
+          <input type="text" id="newKeyField" class="ds-input font-monospace" style="max-width: 520px; font-weight: bold; background: #fff;" value="{{ newly_created_key }}" readonly>
+          <button type="button" class="ds-btn ds-btn-success" onclick="copyNewKey()">
+            <img src="/static_base_icons?name=content_copy&fill=white" style="width: 14px; height: 14px; vertical-align: middle;" alt="">
+            <span>{{ t('copy_key', 'Copier la clé') }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Messages Flash standard -->
+  {% if message and not newly_created_key %}
+  <div class="ds-card p-3 mb-4 border border-{{ message_type }}">
+    <div class="ds-text-sm fw-semibold text-{{ message_type }}">
+      {{ message }}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Section Création & Vue d'ensemble -->
+  <div class="ds-grid ds-grid-cols-1 md:ds-grid-cols-3 ds-gap-4 mb-4">
+    <!-- Formulaire d'émission de clé -->
+    <div class="ds-card p-4 md:ds-col-span-1">
+      <h3 class="ds-h4 mb-3">{{ t('create_key_title', 'Émettre une Nouvelle Clé') }}</h3>
+      <form method="POST" action="/admin/melodi_mcp/keys">
+        <input type="hidden" name="action" value="create">
+        
+        <div class="mb-3">
+          <label class="ds-label mb-1">{{ t('key_name_label', 'Nom de l\'application / Assistant') }} *</label>
+          <input type="text" name="name" class="ds-input w-100" placeholder="ex: Claude Desktop Local, Agent Cursor" required>
+        </div>
+
+        <div class="mb-3">
+          <label class="ds-label mb-1">{{ t('key_role_label', 'Profil d\'accès') }}</label>
+          <select name="role" class="ds-select w-100">
+            <option value="service" selected>{{ t('role_service', 'Service MCP (Toutes capacités)') }}</option>
+            <option value="admin">{{ t('role_admin', 'Administrateur complet') }}</option>
+            <option value="read_only">{{ t('role_read_only', 'Lecture seule uniquement') }}</option>
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <label class="ds-label mb-1">{{ t('key_permissions_label', 'Permissions accordées') }}</label>
+          <input type="text" name="permissions" class="ds-input w-100 font-monospace" value="*" placeholder="* ou blog:read, blog:write">
+          <span class="ds-text-xs ds-text-muted mt-1 d-block">{{ t('key_permissions_hint', '* = accès total, ou liste séparée par des virgules.') }}</span>
+        </div>
+
+        <div class="mb-4">
+          <label class="ds-label mb-1">{{ t('custom_key_label', 'Clé personnalisée (Optionnel)') }}</label>
+          <input type="text" name="custom_key" class="ds-input w-100 font-monospace" placeholder="Laisser vide pour générer automatiquement">
+        </div>
+
+        <button type="submit" class="ds-btn ds-btn-primary w-100">
+          <img src="/static_base_icons?name=key&fill=white" style="width: 14px; height: 14px; vertical-align: middle;" alt="">
+          <span>{{ t('generate_key_button', 'Générer la Clé API') }}</span>
+        </button>
+      </form>
+    </div>
+
+    <!-- Tableau des Clés Actives -->
+    <div class="ds-card p-0 md:ds-col-span-2 overflow-hidden">
+      <div class="p-3 border-bottom ds-flex ds-items-center ds-justify-between bg-light">
+        <div class="ds-flex ds-items-center ds-gap-2">
+          <h3 class="ds-h4 mb-0">{{ t('active_api_keys', 'Clés d\'API Enregistrées') }}</h3>
+          <span class="ds-badge ds-badge-primary">{{ keys|length }}</span>
+        </div>
+        <span class="ds-text-xs ds-text-muted">{{ t('auth_header_info', 'Authentification : Bearer <key> ou X-Internal-MCP-Key') }}</span>
+      </div>
+
+      <div class="ds-table-responsive">
+        <table class="ds-table w-100 mb-0">
+          <thead>
+            <tr>
+              <th>{{ t('key_name', 'Nom / Identifiant') }}</th>
+              <th>{{ t('key_role', 'Rôle') }}</th>
+              <th>{{ t('key_token', 'Jeton') }}</th>
+              <th>{{ t('key_last_used', 'Dernière utilisation') }}</th>
+              <th>{{ t('status', 'Statut') }}</th>
+              <th class="text-end">{{ t('actions', 'Actions') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if keys %}
+              {% for k in keys %}
+                <tr>
+                  <td>
+                    <strong>{{ k.name }}</strong>
+                    <div class="ds-text-xs ds-text-muted">ID: #{{ k.id }} • {{ k.created_at[:10] if k.created_at else '-' }}</div>
+                  </td>
+                  <td>
+                    {% if k.role == 'service' %}
+                      <span class="ds-badge ds-badge-info">{{ t('role_service', 'Service') }}</span>
+                    {% elif k.role == 'admin' %}
+                      <span class="ds-badge ds-badge-primary">{{ t('role_admin', 'Admin') }}</span>
+                    {% else %}
+                      <span class="ds-badge ds-badge-secondary">{{ t('role_read_only', 'Lecture') }}</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <code class="px-2 py-1 rounded bg-light border font-monospace ds-text-xs">{{ k.key_prefix or k.key[:8] + '...' }}</code>
+                  </td>
+                  <td class="ds-text-sm">
+                    {% if k.last_used_at %}
+                      {{ k.last_used_at[:16].replace('T', ' ') }}
+                    {% else %}
+                      <span class="ds-text-muted ds-text-xs">{{ t('never_used', 'Jamais utilisée') }}</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if k.is_active %}
+                      <span class="ds-badge ds-badge-success">{{ t('status_active', 'Active') }}</span>
+                    {% else %}
+                      <span class="ds-badge ds-badge-secondary">{{ t('status_revoked', 'Révoquée') }}</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-end">
+                    <div class="ds-flex ds-items-center ds-justify-end ds-gap-1">
+                      <!-- Bouton Activer / Désactiver -->
+                      <form method="POST" action="/admin/melodi_mcp/keys" style="display:inline;">
+                        <input type="hidden" name="action" value="toggle">
+                        <input type="hidden" name="key_id" value="{{ k.id }}">
+                        {% if k.is_active %}
+                          <button type="submit" class="ds-btn ds-btn-sm ds-btn-outline-warning" title="{{ t('deactivate_key', 'Désactiver la clé') }}">
+                            {{ t('deactivate', 'Désactiver') }}
+                          </button>
+                        {% else %}
+                          <button type="submit" class="ds-btn ds-btn-sm ds-btn-outline-success" title="{{ t('activate_key', 'Activer la clé') }}">
+                            {{ t('activate', 'Activer') }}
+                          </button>
+                        {% endif %}
+                      </form>
+
+                      <!-- Bouton Supprimer -->
+                      <form method="POST" action="/admin/melodi_mcp/keys" style="display:inline;" onsubmit="return confirm('{{ t('confirm_delete_key', 'Êtes-vous sûr de vouloir supprimer définitivement cette clé ? Les clients l\'utilisant seront déconnectés.') }}');">
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="key_id" value="{{ k.id }}">
+                        <button type="submit" class="ds-btn ds-btn-sm ds-btn-outline-danger" title="{{ t('delete_key', 'Supprimer la clé') }}">
+                          {{ t('delete', 'Supprimer') }}
+                        </button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="6" class="text-center py-5 ds-text-muted">
+                  {{ t('no_keys_yet', 'Aucune clé API spécifique créée. La clé par défaut reste utilisable.') }}
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Guide d'intégration et Exemples de configuration -->
+  <div class="ds-card p-4">
+    <h3 class="ds-h4 mb-3">{{ t('integration_guide_title', 'Comment connecter vos Assistants IA (MCP)') }}</h3>
+    
+    <div class="ds-grid ds-grid-cols-1 md:ds-grid-cols-2 ds-gap-4">
+      <div>
+        <h5 class="ds-h5 mb-2">{{ t('claude_desktop_config', 'Configuration Claude Desktop (claude_desktop_config.json)') }}</h5>
+        <pre class="p-3 rounded bg-light border font-monospace ds-text-xs" style="overflow-x:auto;"><code>{
+  "mcpServers": {
+    "melodi-erp": {
+      "command": "python",
+      "args": ["-m", "melodi_mcp_server"],
+      "env": {
+        "MELODI_API_URL": "http://localhost:5000/api/melodi_mcp/internal",
+        "MELODI_API_KEY": "{VOTRE_CLE_API}"
+      }
+    }
+  }
+}</code></pre>
+      </div>
+
+      <div>
+        <h5 class="ds-h5 mb-2">{{ t('curl_test_request', 'Test direct en ligne de commande (cURL)') }}</h5>
+        <pre class="p-3 rounded bg-light border font-monospace ds-text-xs" style="overflow-x:auto;"><code>curl -X GET "http://localhost:5000/api/melodi_mcp/internal/tools" \
+  -H "Authorization: Bearer {VOTRE_CLE_API}"
+
+# Ou via l'en-tête dédié :
+curl -X GET "http://localhost:5000/api/melodi_mcp/internal/tools" \
+  -H "X-Internal-MCP-Key: {VOTRE_CLE_API}"</code></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function copyNewKey() {
+  var copyText = document.getElementById("newKeyField");
+  if (copyText) {
+    copyText.select();
+    copyText.setSelectionRange(0, 99999);
+    navigator.clipboard.writeText(copyText.value).then(function() {
+      alert("{{ t('key_copied_to_clipboard', 'Clé API copiée dans le presse-papier !') }}");
+    });
+  }
+}
+</script>

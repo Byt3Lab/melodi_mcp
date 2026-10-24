@@ -38,7 +38,7 @@ class MCPAuditRepository:
                     status=status,
                     error_code=error_code,
                     duration_ms=duration_ms,
-                    created_at=datetime.now(timezone.utc),
+                    created_at=datetime.now(timezone.utc).replace(tzinfo=None),
                 )
                 if hasattr(session, "add"):
                     res = session.add(log_entry)

@@ -8,6 +8,7 @@ PREFIX_TABLE = get_prefix_table(MODULE_NAME)
 class MCPTables(BaseModuleTables):
     """Centralisation des tables SQL du module melodi_mcp."""
     AUDIT_LOGS = f"{PREFIX_TABLE}audit_logs"
+    API_KEYS = f"{PREFIX_TABLE}api_keys"
 
 
 CONTRACT_VERSION = "1.0.0"

@@ -1,0 +1,81 @@
+<div class="ds-container-fluid p-4">
+  <!-- En-tête de page -->
+  <div class="ds-flex ds-items-center ds-justify-between mb-4">
+    <div>
+      <h1 class="ds-h2 mb-1">{{ t('manifest_title', 'Configuration du Serveur MCP') }}</h1>
+      <p class="ds-text-muted mb-0">{{ t('manifest_subtitle', 'Informations de synchronisation et paramètres de connexion pour melodi_mcp_server') }}</p>
+    </div>
+    <div class="ds-flex ds-items-center ds-gap-2">
+      <a href="/admin/melodi_mcp" class="ds-btn ds-btn-sm ds-btn-secondary">
+        ← {{ t('catalog_tab', 'Catalogue des Outils') }}
+      </a>
+      <a href="/admin/melodi_mcp/keys" class="ds-btn ds-btn-sm ds-btn-outline-primary">
+        {{ t('nav_keys', 'Clés d\'API & Sécurité') }}
+      </a>
+      <a href="/admin/melodi_mcp/audit" class="ds-btn ds-btn-sm ds-btn-secondary">
+        {{ t('nav_audit', 'Journal d\'Audit') }} →
+      </a>
+    </div>
+  </div>
+
+  <!-- Paramètres de connexion -->
+  <div class="ds-grid ds-grid-cols-1 md:ds-grid-cols-2 ds-gap-4 mb-4">
+    <div class="ds-card p-4">
+      <h4 class="ds-h4 mb-3">{{ t('connection_info', 'Paramètres de Connexion') }}</h4>
+      <div class="mb-3">
+        <label class="ds-label text-muted">{{ t('internal_api_url', 'URL de l\'API interne') }} :</label>
+        <div class="p-2.5 rounded bg-light border font-monospace ds-text-sm">
+          <code>http://localhost:5000/api/melodi_mcp/internal</code>
+        </div>
+      </div>
+      <div class="mb-3">
+        <label class="ds-label text-muted">{{ t('internal_api_key', 'Clé d\'authentification interne') }} :</label>
+        <div class="p-2.5 rounded bg-light border font-monospace ds-text-sm">
+          <code>{{ internal_key }}</code>
+        </div>
+      </div>
+      <div>
+        <label class="ds-label text-muted">{{ t('contract_version', 'Version du Contrat') }} :</label>
+        <div class="p-2.5 rounded bg-light border font-monospace ds-text-sm">
+          <code>v{{ contract_version }}</code>
+        </div>
+      </div>
+    </div>
+
+    <!-- Capacités actives -->
+    <div class="ds-card p-4">
+      <h4 class="ds-h4 mb-3">{{ t('registered_capabilities', 'Capacités enregistrées') }}</h4>
+      <ul class="list-unstyled mb-0">
+        <li class="py-2 border-bottom d-flex justify-content-between align-items-center">
+          <span>Découverte dynamique des outils</span>
+          <span class="ds-badge ds-badge-success">Actif</span>
+        </li>
+        <li class="py-2 border-bottom d-flex justify-content-between align-items-center">
+          <span>Support ETag / 304 Not Modified</span>
+          <span class="ds-badge ds-badge-success">Actif ({{ catalog_revision }})</span>
+        </li>
+        <li class="py-2 border-bottom d-flex justify-content-between align-items-center">
+          <span>Authentification Bearer JWT & Service Key</span>
+          <span class="ds-badge ds-badge-success">Actif</span>
+        </li>
+        <li class="py-2 border-bottom d-flex justify-content-between align-items-center">
+          <span>Contrôle RBAC et isolation de contexte</span>
+          <span class="ds-badge ds-badge-success">Actif</span>
+        </li>
+        <li class="py-2 d-flex justify-content-between align-items-center">
+          <span>Outils destructifs protégés par confirmation</span>
+          <span class="ds-badge ds-badge-warning">Exigé</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Manifeste JSON brut -->
+  <div class="ds-card p-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h4 class="ds-h4 mb-0">Manifeste JSON du Serveur (GET /manifest)</h4>
+      <span class="ds-badge ds-badge-secondary">JSON standard</span>
+    </div>
+    <pre class="p-3 rounded bg-light border mb-0" style="max-height: 400px; overflow-y: auto;"><code>{{ manifest_json }}</code></pre>
+  </div>
+</div>

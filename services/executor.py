@@ -197,6 +197,7 @@ class ToolExecutor:
     async def _run_handler(self, tool: ToolDefinition, payload: dict[str, Any]) -> Any:
         """Exécute le handler configuré sous surveillance de timeout."""
         timeout = tool.timeout_seconds
+        import inspect
 
         async def _call():
             # Si le handler est une chaîne sous la forme "module:action_name" ou "action_name"
@@ -211,7 +212,10 @@ class ToolExecutor:
                     target_module = tool.module
                     action_name = action_target
 
-                return await self.app.hook_manager.action.execute(target_module, action_name, payload)
+                res = self.app.hook_manager.action.execute(target_module, action_name, payload)
+                if inspect.isawaitable(res):
+                    return await res
+                return res
 
             # Si le handler est un callable async directement enregistré
             elif callable(tool.handler):

@@ -12,13 +12,14 @@ from ..contract.errors import (
 from ..services.auditor import MCPAuditor
 from ..services.executor import ToolExecutor
 from ..services.tool_registry import ToolRegistry
+from ..services.api_key_service import MCPApiKeyService
 
 
 class MCPAPIController:
     """Contrôleur API REST interne pour melodi_mcp_server."""
 
     @classmethod
-    def _authenticate_request(cls, request: Request) -> Optional[dict[str, Any]]:
+    async def _authenticate_request(cls, request: Request) -> Optional[dict[str, Any]]:
         """Authentifie la requête entrante et extrait le contexte utilisateur vérifié."""
         # 1. Vérification session existante (web / admin)
         session_user = request.get_session("user_payload") if hasattr(request, "get_session") else None
@@ -34,31 +35,56 @@ class MCPAPIController:
         if auth_header.startswith("Bearer "):
             token = auth_header[7:].strip()
 
-        # Mode A: Clé de service interne partagée
-        if internal_key_header == MCP_INTERNAL_KEY or token == MCP_INTERNAL_KEY:
-            # Vérifier si un contexte utilisateur signé est transmis en complément
-            forwarded_user = request.headers.get("X-MCP-User-Token")
-            if forwarded_user:
-                decoded = JwtUtils.decode(forwarded_user)
-                if decoded and "user_id" in decoded:
-                    permissions_map = request.app.cache.get("user_permissions") or {} if hasattr(request.app, "cache") and request.app.cache else {}
-                    perms = permissions_map.get(decoded["user_id"], [])
-                    return {
-                        "user_id": decoded["user_id"],
-                        "username": decoded.get("username", "service_user"),
-                        "is_sudo": decoded.get("is_sudo", False),
-                        "permissions": perms,
-                        "auth_type": "service_forwarded",
-                    }
+        candidate_key = internal_key_header or token
 
-            # Identité de service autonome
-            return {
-                "user_id": "service_mcp",
-                "username": "melodi_mcp_service",
-                "is_sudo": True,
-                "permissions": ["*"],
-                "auth_type": "service_key",
-            }
+        # Mode A: Clé de service interne ou clé d'API MCP
+        if candidate_key:
+            if candidate_key == MCP_INTERNAL_KEY:
+                # Vérifier si un contexte utilisateur signé est transmis en complément
+                forwarded_user = request.headers.get("X-MCP-User-Token")
+                if forwarded_user:
+                    decoded = JwtUtils.decode(forwarded_user)
+                    if decoded and "user_id" in decoded:
+                        permissions_map = request.app.cache.get("user_permissions") or {} if hasattr(request.app, "cache") and request.app.cache else {}
+                        perms = permissions_map.get(decoded["user_id"], [])
+                        return {
+                            "user_id": decoded["user_id"],
+                            "username": decoded.get("username", "service_user"),
+                            "is_sudo": decoded.get("is_sudo", False),
+                            "permissions": perms,
+                            "auth_type": "service_forwarded",
+                        }
+
+                # Identité de service autonome
+                return {
+                    "user_id": "service_mcp",
+                    "username": "melodi_mcp_service",
+                    "is_sudo": True,
+                    "permissions": ["*"],
+                    "auth_type": "service_key",
+                }
+
+            # Vérification dynamique dans la base de données via MCPApiKeyService
+            try:
+                api_key_service = MCPApiKeyService(app=request.app)
+                verified = await api_key_service.verify_key(candidate_key)
+                if verified:
+                    forwarded_user = request.headers.get("X-MCP-User-Token")
+                    if forwarded_user:
+                        decoded = JwtUtils.decode(forwarded_user)
+                        if decoded and "user_id" in decoded:
+                            permissions_map = request.app.cache.get("user_permissions") or {} if hasattr(request.app, "cache") and request.app.cache else {}
+                            perms = permissions_map.get(decoded["user_id"], [])
+                            return {
+                                "user_id": decoded["user_id"],
+                                "username": decoded.get("username", "service_user"),
+                                "is_sudo": decoded.get("is_sudo", False),
+                                "permissions": perms,
+                                "auth_type": "service_forwarded",
+                            }
+                    return verified
+            except Exception as e:
+                print(f"[melodi_mcp] Erreur lors de la vérification de la clé API: {e}")
 
         # Mode B: Bearer Token JWT utilisateur standard
         if token:
@@ -145,7 +171,7 @@ class MCPAPIController:
     async def list_tools(cls, request: Request, response: Response):
         """GET /tools - Découverte du catalogue des outils."""
         # 1. Vérification d'authentification
-        user_ctx = cls._authenticate_request(request)
+        user_ctx = await cls._authenticate_request(request)
         if not user_ctx:
             err = AuthenticationRequiredError()
             return response.render_json(err.to_dict(), status_code=err.status_code)
@@ -206,7 +232,7 @@ class MCPAPIController:
     async def execute_tool(cls, request: Request, response: Response):
         """POST /tools/<tool_name>/execute ou POST /tools/execute."""
         # 1. Authentification stricte
-        user_ctx = cls._authenticate_request(request)
+        user_ctx = await cls._authenticate_request(request)
         if not user_ctx:
             err = AuthenticationRequiredError()
             return response.render_json(err.to_dict(), status_code=err.status_code)
@@ -268,7 +294,7 @@ class MCPAPIController:
     @classmethod
     async def audit_logs(cls, request: Request, response: Response):
         """GET /internal/audit-logs - Historique d'audit des exécutions."""
-        user_ctx = cls._authenticate_request(request)
+        user_ctx = await cls._authenticate_request(request)
         if not user_ctx:
             err = AuthenticationRequiredError()
             return response.render_json(err.to_dict(), status_code=err.status_code)
