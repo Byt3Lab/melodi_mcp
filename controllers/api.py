@@ -237,13 +237,22 @@ class MCPAPIController:
             err = AuthenticationRequiredError()
             return response.render_json(err.to_dict(), status_code=err.status_code)
 
-        # 2. Résolution du nom d'outil (paramètre d'URL, query string, ou body)
+        # 2. Résolution du corps JSON sécurisé
+        body = {}
+        if hasattr(request, "get_json") and callable(request.get_json):
+            raw_body = request.get_json()
+            if isinstance(raw_body, dict):
+                body = raw_body
+        elif isinstance(getattr(request, "json", None), dict):
+            body = request.json
+
+        # 3. Résolution du nom d'outil (paramètre d'URL, query string, ou body)
         tool_name = (
             request.params.get("tool_name")
             or request.params.get("name")
             or request.query.get("tool_name")
-            or request.json.get("tool_name")
-            or request.json.get("name")
+            or body.get("tool_name")
+            or body.get("name")
         )
 
         if not tool_name:
@@ -254,8 +263,6 @@ class MCPAPIController:
                     "message": "Le nom de l'outil à exécuter est requis.",
                 }
             }, status_code=400)
-
-        body = request.json or {}
         arguments = body.get("arguments", {})
         correlation_id = body.get("correlation_id") or request.headers.get("X-Correlation-ID")
         confirmed = bool(body.get("confirmed", False))
