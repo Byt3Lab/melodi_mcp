@@ -52,9 +52,7 @@ class MelodiMCPModule(ApplicationModule):
         # 3. Routes API REST internes destinées à melodi_mcp_server et à la gestion des tokens
         # Endpoints de santé et manifeste
         self.api_router.add_route("/health", MCPAPIController.health, methods=["GET"])
-        self.api_router.add_route("/internal/health", MCPAPIController.health, methods=["GET"])
         self.api_router.add_route("/manifest", MCPAPIController.manifest, methods=["GET"])
-        self.api_router.add_route("/internal/manifest", MCPAPIController.manifest, methods=["GET"])
 
         # Révision rapide du catalogue (avec support ETag / 304 Not Modified)
         self.api_router.add_route("/revision", MCPAPIController.get_revision, methods=["GET"])
