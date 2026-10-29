@@ -36,15 +36,20 @@ class MelodiMCPModule(ApplicationModule):
 
     def _register_routes(self):
         """Enregistre les routes Web d'administration et les routes API REST."""
+        from .middlewares import mcp_auth_middleware
+
         # 1. Routes d'administration Web
         self.admin_router.add_route("", MCPWebController.admin_dashboard, methods=["GET"])
         self.admin_router.add_route("/", MCPWebController.admin_dashboard, methods=["GET"])
         self.admin_router.add_route("/audit", MCPWebController.admin_audit, methods=["GET"])
         self.admin_router.add_route("/keys", MCPWebController.admin_api_keys, methods=["GET", "POST"])
         self.admin_router.add_route("/api-keys", MCPWebController.admin_api_keys, methods=["GET", "POST"])
-        self.admin_router.add_route("/manifest", MCPWebController.admin_manifest, methods=["GET"])
+        self.admin_router.add_route("/manifest", MCPWebController.admin_manifest, methods=["GET", "POST"])
 
-        # 2. Routes API REST internes destinées à melodi_mcp_server
+        # 2. Middleware d'authentification MCP sur le routeur API
+        self.api_router.add_middleware(mcp_auth_middleware)
+
+        # 3. Routes API REST internes destinées à melodi_mcp_server et à la gestion des tokens
         # Endpoints de santé et manifeste
         self.api_router.add_route("/health", MCPAPIController.health, methods=["GET"])
         self.api_router.add_route("/internal/health", MCPAPIController.health, methods=["GET"])
@@ -64,6 +69,10 @@ class MelodiMCPModule(ApplicationModule):
         self.api_router.add_route("/internal/tools/<tool_name>/execute", MCPAPIController.execute_tool, methods=["POST"])
         self.api_router.add_route("/tools/execute", MCPAPIController.execute_tool, methods=["POST"])
         self.api_router.add_route("/internal/tools/execute", MCPAPIController.execute_tool, methods=["POST"])
+
+        # Gestion des tokens personnels (7 jours par défaut)
+        self.api_router.add_route("/tokens", MCPAPIController.manage_tokens, methods=["GET", "POST"])
+        self.api_router.add_route("/tokens/<token_id>", MCPAPIController.delete_token, methods=["DELETE"])
 
         # Journaux d'audit
         self.api_router.add_route("/internal/audit-logs", MCPAPIController.audit_logs, methods=["GET"])
@@ -89,7 +98,7 @@ class MelodiMCPModule(ApplicationModule):
             children=[
                 {"label": "Catalogue des Outils", "icon": "name=extension&fill=white", "url": "/admin/melodi_mcp"},
                 {"label": "Journal d'Audit", "icon": "name=history&fill=white", "url": "/admin/melodi_mcp/audit"},
-                {"label": "Clés d'API & Sécurité", "icon": "name=key&fill=white", "url": "/admin/melodi_mcp/keys"},
+                {"label": "Mes Tokens MCP", "icon": "name=key&fill=white", "url": "/admin/melodi_mcp/keys"},
                 {"label": "Serveur & Manifeste", "icon": "name=cloud_sync&fill=white", "url": "/admin/melodi_mcp/manifest"},
             ]
         )
@@ -202,11 +211,13 @@ class MelodiMCPModule(ApplicationModule):
         # Collecte initiale des outils enregistrés dans le Registry central
         await self._collect_registry_contributions()
 
-        # Initialisation de la clé de service par défaut si base de données disponible
+        # Initialisation et chargement de la clé de service interne
         if self.app and hasattr(self.app, "db") and self.app.db:
             try:
                 from .services.api_key_service import MCPApiKeyService
-                await MCPApiKeyService(app=self.app).ensure_default_key()
+                key_svc = MCPApiKeyService(app=self.app)
+                await key_svc.load_persisted_internal_key()
+                await key_svc.ensure_default_key()
             except Exception as e:
                 print(f"[melodi_mcp] Erreur initialisation clé API par défaut: {e}")
 

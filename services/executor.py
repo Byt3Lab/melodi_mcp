@@ -166,23 +166,45 @@ class ToolExecutor:
             return exc.to_dict(correlation_id=correlation_id)
 
     def _verify_permissions(self, tool: ToolDefinition, user_context: dict[str, Any]) -> None:
-        """Vérifie si l'utilisateur possède toutes les permissions requises."""
+        """Vérifie si l'utilisateur possède toutes les permissions requises via le système RBAC MELODI."""
         if user_context.get("is_sudo"):
             return
 
         if not tool.required_permissions:
             return
 
-        user_perms = set(user_context.get("permissions") or [])
+        from core.utils.permissions import check_user_permission
 
-        # Support wildcard matching (ex: "wallet:*" autorise "wallet:read")
+        # Charger les permissions fraîches depuis le cache RBAC de MELODI si disponible pour cet utilisateur
+        user_id = user_context.get("user_id")
+        live_perms = None
+        if user_id and self.app and hasattr(self.app, "cache") and self.app.cache:
+            perms_map = self.app.cache.get("user_permissions")
+            if isinstance(perms_map, dict) and user_id in perms_map:
+                live_perms = set(perms_map.get(user_id) or [])
+
+        user_perms = live_perms if live_perms is not None else set(user_context.get("permissions") or [])
+        if "*" in user_perms:
+            return
+
+        # Support wildcard matching et check_user_permission natif MELODI
         for req in tool.required_permissions:
+            if live_perms is not None:
+                if check_user_permission(user_context, req, app=self.app):
+                    continue
+                if check_user_permission(user_context, f"{tool.module}.{req}", app=self.app):
+                    continue
+
             if req in user_perms:
+                continue
+
+            # Support préfixe module (ex: "invoicing:read" <-> "melodi_invoicing.invoicing:read")
+            if f"{tool.module}.{req}" in user_perms:
                 continue
 
             # Vérification wildcard sur préfixe
             parts = req.split(":")
-            if len(parts) == 2 and f"{parts[0]}:*" in user_perms:
+            if len(parts) == 2 and (f"{parts[0]}:*" in user_perms or f"{tool.module}.{parts[0]}:*" in user_perms):
                 continue
 
             parts_dot = req.split(".")
@@ -193,6 +215,14 @@ class ToolExecutor:
                 f"L'utilisateur ne dispose pas de la permission requise '{req}' pour cet outil.",
                 details={"missing_permission": req, "tool": tool.name}
             )
+
+    def has_tool_permission(self, tool: ToolDefinition, user_context: dict[str, Any]) -> bool:
+        """Retourne True si l'utilisateur a les permissions requises pour utiliser l'outil."""
+        try:
+            self._verify_permissions(tool, user_context)
+            return True
+        except PermissionDeniedError:
+            return False
 
     async def _run_handler(self, tool: ToolDefinition, payload: dict[str, Any]) -> Any:
         """Exécute le handler configuré sous surveillance de timeout."""

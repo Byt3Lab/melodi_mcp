@@ -10,13 +10,22 @@
         ← {{ t('catalog_tab', 'Catalogue des Outils') }}
       </a>
       <a href="/admin/melodi_mcp/keys" class="ds-btn ds-btn-sm ds-btn-outline-primary">
-        {{ t('nav_keys', 'Clés d\'API & Sécurité') }}
+        {{ t('nav_keys', 'Mes Tokens MCP') }}
       </a>
       <a href="/admin/melodi_mcp/audit" class="ds-btn ds-btn-sm ds-btn-secondary">
         {{ t('nav_audit', 'Journal d\'Audit') }} →
       </a>
     </div>
   </div>
+
+  <!-- Messages Flash standard -->
+  {% if message %}
+  <div class="ds-card p-3 mb-4 border border-{{ message_type }}" style="background: {% if message_type == 'success' %}rgba(16, 185, 129, 0.08){% else %}rgba(239, 68, 68, 0.08){% endif %};">
+    <div class="ds-text-sm fw-semibold text-{{ message_type }}">
+      {{ message }}
+    </div>
+  </div>
+  {% endif %}
 
   <!-- Paramètres de connexion -->
   <div class="ds-grid ds-grid-cols-1 md:ds-grid-cols-2 ds-gap-4 mb-4">
@@ -28,12 +37,37 @@
           <code>http://localhost:5000/api/melodi_mcp/internal</code>
         </div>
       </div>
+
       <div class="mb-3">
         <label class="ds-label text-muted">{{ t('internal_api_key', 'Clé d\'authentification interne') }} :</label>
-        <div class="p-2.5 rounded bg-light border font-monospace ds-text-sm">
-          <code>{{ internal_key }}</code>
+        <div class="ds-flex ds-items-center ds-gap-2">
+          <input type="text" id="currentKeyField" class="ds-input font-monospace flex-grow-1" value="{{ internal_key }}" readonly style="background: #f8f9fa;">
+          <button type="button" class="ds-btn ds-btn-sm ds-btn-secondary text-nowrap" onclick="copyCurrentKey()">
+            <img src="/static_base_icons?name=content_copy&fill=currentColor" style="width: 14px; height: 14px; vertical-align: middle;" alt="">
+            <span>{{ t('copy_key', 'Copier') }}</span>
+          </button>
         </div>
       </div>
+
+      <!-- Formulaire de mise à jour de la clé interne -->
+      <form method="POST" action="/admin/melodi_mcp/manifest" class="p-3 bg-light rounded border mb-3">
+        <input type="hidden" name="action" value="update_key">
+        <label class="ds-label fw-bold mb-1">{{ t('update_internal_key_label', 'Modifier la Clé d\'Authentification Interne') }}</label>
+        <p class="ds-text-xs ds-text-muted mb-2">
+          {{ t('update_internal_key_help', 'Cette clé partagée permet à melodi_mcp_server de synchroniser les catalogues et de communiquer de façon sécurisée avec MELODI.') }}
+        </p>
+        <div class="ds-flex ds-items-center ds-gap-2 mb-2">
+          <input type="text" name="internal_key" id="internalKeyInput" class="ds-input font-monospace flex-grow-1" value="{{ internal_key }}" placeholder="ex: mcp_internal_secret_..." required>
+          <button type="button" class="ds-btn ds-btn-secondary ds-btn-sm text-nowrap" onclick="generateNewInternalKey()">
+            {{ t('generate_random_key', 'Générer') }}
+          </button>
+        </div>
+        <button type="submit" class="ds-btn ds-btn-primary ds-btn-sm w-100">
+          <img src="/static_base_icons?name=save&fill=white" style="width: 14px; height: 14px; vertical-align: middle;" alt="">
+          <span>{{ t('save_internal_key_btn', 'Enregistrer la nouvelle clé') }}</span>
+        </button>
+      </form>
+
       <div>
         <label class="ds-label text-muted">{{ t('contract_version', 'Version du Contrat') }} :</label>
         <div class="p-2.5 rounded bg-light border font-monospace ds-text-sm">
@@ -79,3 +113,28 @@
     <pre class="p-3 rounded bg-light border mb-0" style="max-height: 400px; overflow-y: auto;"><code>{{ manifest_json }}</code></pre>
   </div>
 </div>
+
+<script>
+function copyCurrentKey() {
+  var field = document.getElementById("currentKeyField");
+  if (field) {
+    field.select();
+    field.setSelectionRange(0, 99999);
+    navigator.clipboard.writeText(field.value).then(function() {
+      alert("{{ t('key_copied_to_clipboard', 'Clé API copiée dans le presse-papier !') }}");
+    });
+  }
+}
+
+function generateNewInternalKey() {
+  var chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  var randomStr = "";
+  for (var i = 0; i < 32; i++) {
+    randomStr += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  var input = document.getElementById("internalKeyInput");
+  if (input) {
+    input.value = "mcp_internal_" + randomStr;
+  }
+}
+</script>

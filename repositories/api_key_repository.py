@@ -81,7 +81,10 @@ class MCPApiKeyRepository:
 
         async def _do_get(s):
             res = await s.execute(stmt)
-            return res.scalar_one_or_none()
+            obj = res.scalar_one_or_none() if hasattr(res, "scalar_one_or_none") else None
+            if inspect.isawaitable(obj):
+                obj = await obj
+            return obj
 
         if session:
             return await _do_get(session)
@@ -99,7 +102,10 @@ class MCPApiKeyRepository:
 
         async def _do_get(s):
             res = await s.execute(stmt)
-            return res.scalar_one_or_none()
+            obj = res.scalar_one_or_none() if hasattr(res, "scalar_one_or_none") else None
+            if inspect.isawaitable(obj):
+                obj = await obj
+            return obj
 
         if session:
             return await _do_get(session)

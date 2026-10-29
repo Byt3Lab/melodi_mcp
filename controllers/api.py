@@ -20,88 +20,9 @@ class MCPAPIController:
 
     @classmethod
     async def _authenticate_request(cls, request: Request) -> Optional[dict[str, Any]]:
-        """Authentifie la requête entrante et extrait le contexte utilisateur vérifié."""
-        # 1. Vérification session existante (web / admin)
-        session_user = request.get_session("user_payload") if hasattr(request, "get_session") else None
-        if session_user:
-            user = json.loads(session_user) if isinstance(session_user, str) else session_user
-            return user
-
-        # 2. Vérification de l'en-tête Authorization
-        auth_header = request.headers.get("Authorization", "")
-        internal_key_header = request.headers.get("X-Internal-MCP-Key", "")
-
-        token = None
-        if auth_header.startswith("Bearer "):
-            token = auth_header[7:].strip()
-
-        candidate_key = internal_key_header or token
-
-        # Mode A: Clé de service interne ou clé d'API MCP
-        if candidate_key:
-            if candidate_key == MCP_INTERNAL_KEY:
-                # Vérifier si un contexte utilisateur signé est transmis en complément
-                forwarded_user = request.headers.get("X-MCP-User-Token")
-                if forwarded_user:
-                    decoded = JwtUtils.decode(forwarded_user)
-                    if decoded and "user_id" in decoded:
-                        permissions_map = request.app.cache.get("user_permissions") or {} if hasattr(request.app, "cache") and request.app.cache else {}
-                        perms = permissions_map.get(decoded["user_id"], [])
-                        return {
-                            "user_id": decoded["user_id"],
-                            "username": decoded.get("username", "service_user"),
-                            "is_sudo": decoded.get("is_sudo", False),
-                            "permissions": perms,
-                            "auth_type": "service_forwarded",
-                        }
-
-                # Identité de service autonome
-                return {
-                    "user_id": "service_mcp",
-                    "username": "melodi_mcp_service",
-                    "is_sudo": True,
-                    "permissions": ["*"],
-                    "auth_type": "service_key",
-                }
-
-            # Vérification dynamique dans la base de données via MCPApiKeyService
-            try:
-                api_key_service = MCPApiKeyService(app=request.app)
-                verified = await api_key_service.verify_key(candidate_key)
-                if verified:
-                    forwarded_user = request.headers.get("X-MCP-User-Token")
-                    if forwarded_user:
-                        decoded = JwtUtils.decode(forwarded_user)
-                        if decoded and "user_id" in decoded:
-                            permissions_map = request.app.cache.get("user_permissions") or {} if hasattr(request.app, "cache") and request.app.cache else {}
-                            perms = permissions_map.get(decoded["user_id"], [])
-                            return {
-                                "user_id": decoded["user_id"],
-                                "username": decoded.get("username", "service_user"),
-                                "is_sudo": decoded.get("is_sudo", False),
-                                "permissions": perms,
-                                "auth_type": "service_forwarded",
-                            }
-                    return verified
-            except Exception as e:
-                print(f"[melodi_mcp] Erreur lors de la vérification de la clé API: {e}")
-
-        # Mode B: Bearer Token JWT utilisateur standard
-        if token:
-            payload = JwtUtils.decode(token)
-            if payload and "user_id" in payload:
-                user_id = payload["user_id"]
-                permissions_map = request.app.cache.get("user_permissions") or {} if hasattr(request.app, "cache") and request.app.cache else {}
-                user_perms = permissions_map.get(user_id, [])
-                return {
-                    "user_id": user_id,
-                    "username": payload.get("username", ""),
-                    "is_sudo": payload.get("is_sudo", False),
-                    "permissions": user_perms,
-                    "auth_type": "jwt",
-                }
-
-        return None
+        """Authentifie la requête entrante (délègue à resolve_mcp_user)."""
+        from ..middlewares import resolve_mcp_user
+        return await resolve_mcp_user(request, service_cls=MCPApiKeyService)
 
     @classmethod
     async def health(cls, request: Request, response: Response):
@@ -173,7 +94,9 @@ class MCPAPIController:
         # 1. Vérification d'authentification
         user_ctx = await cls._authenticate_request(request)
         if not user_ctx:
-            err = AuthenticationRequiredError()
+            err = AuthenticationRequiredError(
+                message="Authentification utilisateur requise : token personnel MCP manquant, invalide ou expiré. Veuillez générer un token dans MELODI > Mes Tokens MCP."
+            )
             return response.render_json(err.to_dict(), status_code=err.status_code)
 
         registry = ToolRegistry.get_instance(app=request.app)
@@ -200,6 +123,10 @@ class MCPAPIController:
             enabled_only=True,
             check_module_active=True,
         )
+
+        # Filtrage des outils selon les permissions de l'utilisateur
+        executor = ToolExecutor(registry=registry, app=request.app)
+        all_tools = [t for t in all_tools if executor.has_tool_permission(t, user_ctx)]
 
         # Pagination optionnelle
         try:
@@ -234,7 +161,9 @@ class MCPAPIController:
         # 1. Authentification stricte
         user_ctx = await cls._authenticate_request(request)
         if not user_ctx:
-            err = AuthenticationRequiredError()
+            err = AuthenticationRequiredError(
+                message="Authentification utilisateur requise : token personnel MCP manquant, invalide ou expiré. Veuillez générer un token dans MELODI > Mes Tokens MCP."
+            )
             return response.render_json(err.to_dict(), status_code=err.status_code)
 
         # 2. Résolution du corps JSON sécurisé
@@ -303,7 +232,9 @@ class MCPAPIController:
         """GET /internal/audit-logs - Historique d'audit des exécutions."""
         user_ctx = await cls._authenticate_request(request)
         if not user_ctx:
-            err = AuthenticationRequiredError()
+            err = AuthenticationRequiredError(
+                message="Authentification utilisateur requise : token personnel MCP manquant, invalide ou expiré. Veuillez générer un token dans MELODI > Mes Tokens MCP."
+            )
             return response.render_json(err.to_dict(), status_code=err.status_code)
 
         auditor = MCPAuditor(app=request.app)
@@ -327,3 +258,101 @@ class MCPAPIController:
             "data": logs,
             "meta": {"limit": limit, "offset": offset, "count": len(logs)}
         }, status_code=200)
+
+    @classmethod
+    async def manage_tokens(cls, request: Request, response: Response):
+        """GET /tokens (liste) ou POST /tokens (création d'un token personnel 7 jours par défaut)."""
+        user_ctx = await cls._authenticate_request(request)
+        if not user_ctx:
+            err = AuthenticationRequiredError(
+                message="Authentification utilisateur requise : token personnel MCP manquant, invalide ou expiré. Veuillez générer un token dans MELODI > Mes Tokens MCP."
+            )
+            return response.render_json(err.to_dict(), status_code=err.status_code)
+
+        api_key_service = MCPApiKeyService(app=request.app)
+        user_id = str(user_ctx.get("user_id") or "")
+        is_sudo = bool(user_ctx.get("is_sudo", False))
+
+        if request.method == "POST":
+            body = {}
+            if hasattr(request, "get_json") and callable(request.get_json):
+                raw_body = request.get_json()
+                if isinstance(raw_body, dict):
+                    body = raw_body
+            elif isinstance(getattr(request, "json", None), dict):
+                body = request.json
+
+            name = (body.get("name") or f"Token MCP ({user_ctx.get('username', user_id)})").strip()
+            try:
+                expires_in_days = int(body.get("expires_in_days", 7))
+            except (ValueError, TypeError):
+                expires_in_days = 7
+
+            key_obj, raw_key = await api_key_service.create_key(
+                name=name,
+                role="user",
+                permissions="*",
+                created_by=user_id,
+                expires_in_days=expires_in_days,
+            )
+            if not key_obj:
+                return response.render_json({
+                    "success": False,
+                    "error": {
+                        "code": MCPErrorCode.EXECUTION_FAILED.value,
+                        "message": "Impossible de générer le token MCP.",
+                    }
+                }, status_code=500)
+
+            token_data = key_obj.to_dict(mask_key=True)
+            token_data["token"] = raw_key
+            return response.render_json({
+                "success": True,
+                "data": token_data,
+            }, status_code=201)
+
+        # GET /tokens : retourne les tokens de l'utilisateur connecté (ou tous si sudo avec ?all=true)
+        show_all = is_sudo and str(request.query.get("all", "")).lower() in ("true", "1")
+        tokens = await api_key_service.list_keys(user_id=None if show_all else user_id)
+        return response.render_json({
+            "success": True,
+            "data": tokens,
+            "meta": {"total": len(tokens)},
+        }, status_code=200)
+
+    @classmethod
+    async def delete_token(cls, request: Request, response: Response):
+        """DELETE /tokens/<token_id> - Révoque/supprime un token de l'utilisateur."""
+        user_ctx = await cls._authenticate_request(request)
+        if not user_ctx:
+            err = AuthenticationRequiredError(
+                message="Authentification utilisateur requise : token personnel MCP manquant, invalide ou expiré. Veuillez générer un token dans MELODI > Mes Tokens MCP."
+            )
+            return response.render_json(err.to_dict(), status_code=err.status_code)
+
+        raw_id = request.params.get("token_id") or request.query.get("id")
+        try:
+            token_id = int(raw_id)
+        except (ValueError, TypeError):
+            return response.render_json({
+                "success": False,
+                "error": {"code": "INVALID_ARGUMENTS", "message": "Identifiant de token invalide."}
+            }, status_code=400)
+
+        api_key_service = MCPApiKeyService(app=request.app)
+        user_id = str(user_ctx.get("user_id") or "")
+        is_sudo = bool(user_ctx.get("is_sudo", False))
+
+        # Vérification que le token appartient bien à l'utilisateur (sauf sudo)
+        user_keys = await api_key_service.list_keys(user_id=None if is_sudo else user_id)
+        if not any(int(k.get("id", -1)) == token_id for k in user_keys):
+            return response.render_json({
+                "success": False,
+                "error": {"code": MCPErrorCode.PERMISSION_DENIED.value, "message": "Token introuvable ou accès refusé."}
+            }, status_code=403)
+
+        deleted = await api_key_service.delete_key(token_id)
+        return response.render_json({
+            "success": deleted,
+            "data": {"id": token_id, "revoked": deleted},
+        }, status_code=200 if deleted else 404)

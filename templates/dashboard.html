@@ -50,6 +50,7 @@
           <tr>
             <th>{{ t('tool_name', 'Nom de l\'outil') }}</th>
             <th>{{ t('module', 'Module') }}</th>
+            <th>{{ t('required_permissions_col', 'Permissions requises') }}</th>
             <th>{{ t('category', 'Catégorie') }}</th>
             <th>{{ t('version', 'Version') }}</th>
             <th>{{ t('type', 'Type') }}</th>
@@ -66,6 +67,15 @@
                   <div class="ds-text-muted ds-text-xs">{{ tool.description }}</div>
                 </td>
                 <td><span class="ds-badge ds-badge-light">{{ tool.module }}</span></td>
+                <td>
+                  {% if tool.required_permissions %}
+                    {% for perm in tool.required_permissions %}
+                      <code class="px-2 py-1 rounded bg-light border font-monospace ds-text-xs me-1">{{ perm }}</code>
+                    {% endfor %}
+                  {% else %}
+                    <span class="ds-text-muted ds-text-xs">{{ t('public_authenticated', 'Authentifié (Aucune)') }}</span>
+                  {% endif %}
+                </td>
                 <td><span class="ds-badge ds-badge-secondary">{{ tool.category }}</span></td>
                 <td><code>v{{ tool.version }}</code></td>
                 <td>

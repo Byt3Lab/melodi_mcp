@@ -71,6 +71,7 @@ class ToolDefinition:
             "version": self.version,
             "enabled": self.enabled,
             "required_permissions": list(self.required_permissions),
+            "permissions": list(self.required_permissions),
             "read_only": self.read_only,
             "destructive": self.destructive,
             "category": self.category,
@@ -85,6 +86,12 @@ class ToolDefinition:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ToolDefinition":
         """Instancie et valide une ToolDefinition depuis un dictionnaire."""
+        raw_perms = data.get("required_permissions")
+        if raw_perms is None:
+            raw_perms = data.get("permissions", [])
+        if isinstance(raw_perms, str):
+            raw_perms = [p.strip() for p in raw_perms.split(",") if p.strip()]
+
         tool = cls(
             name=data.get("name", ""),
             description=data.get("description", ""),
@@ -92,7 +99,7 @@ class ToolDefinition:
             module=data.get("module", ""),
             version=data.get("version", "1.0.0"),
             enabled=data.get("enabled", True),
-            required_permissions=data.get("required_permissions", []),
+            required_permissions=list(raw_perms or []),
             handler=data.get("handler", ""),
             read_only=data.get("read_only", True),
             destructive=data.get("destructive", False),
