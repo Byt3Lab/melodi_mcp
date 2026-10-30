@@ -60,20 +60,16 @@ class MelodiMCPModule(ApplicationModule):
 
         # Découverte du catalogue d'outils
         self.api_router.add_route("/tools", MCPAPIController.list_tools, methods=["GET"])
-        self.api_router.add_route("/internal/tools", MCPAPIController.list_tools, methods=["GET"])
 
         # Exécution d'un outil (chemins dynamiques et chemin fixe pour query/body)
         self.api_router.add_route("/tools/<tool_name>/execute", MCPAPIController.execute_tool, methods=["POST"])
-        self.api_router.add_route("/internal/tools/<tool_name>/execute", MCPAPIController.execute_tool, methods=["POST"])
         self.api_router.add_route("/tools/execute", MCPAPIController.execute_tool, methods=["POST"])
-        self.api_router.add_route("/internal/tools/execute", MCPAPIController.execute_tool, methods=["POST"])
 
         # Gestion des tokens personnels (7 jours par défaut)
         self.api_router.add_route("/tokens", MCPAPIController.manage_tokens, methods=["GET", "POST"])
         self.api_router.add_route("/tokens/<token_id>", MCPAPIController.delete_token, methods=["DELETE"])
 
         # Journaux d'audit
-        self.api_router.add_route("/internal/audit-logs", MCPAPIController.audit_logs, methods=["GET"])
         self.api_router.add_route("/audit-logs", MCPAPIController.audit_logs, methods=["GET"])
 
     def _register_actions(self):

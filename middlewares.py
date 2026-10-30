@@ -42,28 +42,37 @@ async def resolve_mcp_user(request: Request, service_cls=None) -> Optional[dict[
 
     # 2. Extraction des en-têtes d'authentification
     headers = getattr(request, "headers", None)
-    if not isinstance(headers, dict):
+    if headers is None or not hasattr(headers, "get"):
         headers = {}
-    auth_header = headers.get("Authorization", "")
-    if not isinstance(auth_header, str):
-        auth_header = ""
-    internal_key_header = headers.get("X-Internal-MCP-Key", "")
-    if not isinstance(internal_key_header, str):
-        internal_key_header = ""
+
+    def _get_header(name: str) -> str:
+        if not hasattr(headers, "get"):
+            return ""
+        val = headers.get(name)
+        if val is None or not isinstance(val, str):
+            val = headers.get(name.lower())
+        return val.strip() if isinstance(val, str) else ""
+
+    auth_header = _get_header("Authorization")
+    internal_key_header = _get_header("X-Internal-MCP-Key")
 
     query = getattr(request, "query", None)
-    if not isinstance(query, dict):
+    if query is None or not hasattr(query, "get"):
         query = {}
 
+    def _get_query(name: str) -> str:
+        if not hasattr(query, "get"):
+            return ""
+        val = query.get(name)
+        return val.strip() if isinstance(val, str) else ""
+
     user_key_header = (
-        headers.get("X-User-MCP-Key", "")
-        or headers.get("X-MCP-User-Key", "")
-        or headers.get("X-MCP-User-Token", "")
-        or query.get("user_key", "")
-        or query.get("user_token", "")
+        _get_header("X-User-MCP-Key")
+        or _get_header("X-MCP-User-Key")
+        or _get_header("X-MCP-User-Token")
+        or _get_query("user_key")
+        or _get_query("user_token")
     )
-    if not isinstance(user_key_header, str):
-        user_key_header = ""
 
     token = None
     if auth_header.startswith("Bearer "):
