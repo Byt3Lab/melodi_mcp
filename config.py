@@ -14,3 +14,5 @@ class MCPTables(BaseModuleTables):
 CONTRACT_VERSION = "1.0.0"
 DEFAULT_TIMEOUT_SECONDS = 30.0
 MCP_INTERNAL_KEY = os.environ.get("MELODI_MCP_INTERNAL_KEY", "mcp-internal-secret-token")
+MCP_SERVER_URL = os.environ.get("MCP_SERVER_URL", "http://localhost:8765/mcp")
+MCP_SERVER_API_KEY = os.environ.get("MCP_API_KEY", "mon-super-token-mcp-securise-2026")

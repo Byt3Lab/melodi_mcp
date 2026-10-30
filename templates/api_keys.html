@@ -82,12 +82,14 @@
       <p class="ds-text-xs ds-text-muted mb-2">
         Collez ce bloc dans votre fichier de configuration MCP (ex: <code>.cursor/mcp.json</code> ou <code>claude_desktop_config.json</code>) :
       </p>
-      <textarea id="mcpConfigSnippet" class="form-control font-monospace ds-text-xs w-100" rows="8" readonly style="background: #f8fafc; resize: vertical;">{
+      <textarea id="mcpConfigSnippet" class="form-control font-monospace ds-text-xs w-100" rows="11" readonly style="background: #f8fafc; resize: vertical;">{
   "mcpServers": {
     "melodi": {
-      "url": "http://localhost:8765/mcp",
+      "url": "{{ mcp_server_url or 'http://localhost:8765/mcp' }}",
+      "type": "http",
       "headers": {
-        "Authorization": "Bearer {{ newly_created_key }}"
+        "Authorization": "Bearer {{ newly_created_key }}",
+        "X-MCP-API-KEY": "{{ mcp_api_key or 'mon-super-token-mcp-securise-2026' }}"
       }
     }
   }
@@ -240,28 +242,38 @@
     </div>
   </div>
 
-  <!-- Guide d'intégration des en-têtes X-Internal-MCP-Key & X-User-MCP-Key -->
+  <!-- Guide d'intégration des en-têtes X-MCP-API-KEY & Authorization -->
   <div class="ds-card p-4">
     <h3 class="ds-h4 mb-3">{{ t('integration_headers_title', 'Authentification : Serveur MCP et Utilisateur') }}</h3>
     <div class="ds-grid ds-grid-cols-1 md:ds-grid-cols-2 ds-gap-4">
       <div>
-        <h5 class="ds-h5 mb-2">{{ t('dual_auth_title', 'Principe de double authentification') }}</h5>
+        <h5 class="ds-h5 mb-2">{{ t('dual_auth_title', 'Double Authentification Requise') }}</h5>
         <ul class="ds-text-sm ds-text-muted mb-0">
           <li class="mb-2">
-            <code>X-Internal-MCP-Key</code> : Authentifie le serveur MCP (<code>melodi_mcp_server</code>) auprès de MELODI ERP.
+            <code>X-MCP-API-KEY</code> : Clé d'infrastructure sécurisant l'instance du serveur MCP (<code>melodi_mcp_server</code>).
+          </li>
+          <li class="mb-2">
+            <code>Authorization: Bearer &lt;token&gt;</code> : Transmet votre token personnel d'agent IA (<code>mcp_live_...</code>). Le serveur MCP et MELODI vérifient ce token pour contrôler vos permissions.
           </li>
           <li>
-            <code>X-User-MCP-Key</code> : Transmet votre token personnel d'agent IA. Le middleware MELODI vérifie ce token et contrôle que vous possédez les permissions pour exécuter chaque outil.
+            <code>X-Internal-MCP-Key</code> : Clé de service interne entre le serveur MCP et MELODI ERP.
           </li>
         </ul>
       </div>
       <div>
-        <h5 class="ds-h5 mb-2">{{ t('curl_example_title', 'Exemple d\'appel cURL') }}</h5>
-        <pre class="p-3 rounded bg-light border font-monospace ds-text-xs mb-0" style="overflow-x:auto;"><code>curl -X POST "http://localhost:5000/api/melodi_mcp/tools/execute" \
-  -H "X-Internal-MCP-Key: {CLE_INTERNE_SERVEUR}" \
-  -H "X-User-MCP-Key: {VOTRE_TOKEN_MCP}" \
-  -H "Content-Type: application/json" \
-  -d '{"tool_name": "...", "arguments": {...}}'</code></pre>
+        <h5 class="ds-h5 mb-2">{{ t('mcp_json_example_title', 'Structure .mcp.json requise') }}</h5>
+        <pre class="p-3 rounded bg-light border font-monospace ds-text-xs mb-0" style="overflow-x:auto;"><code>{
+  "mcpServers": {
+    "melodi": {
+      "url": "{{ mcp_server_url or 'http://localhost:8765/mcp' }}",
+      "type": "http",
+      "headers": {
+        "Authorization": "Bearer &lt;VOTRE_TOKEN_MCP&gt;",
+        "X-MCP-API-KEY": "{{ mcp_api_key or 'mon-super-token-mcp-securise-2026' }}"
+      }
+    }
+  }
+}</code></pre>
       </div>
     </div>
   </div>

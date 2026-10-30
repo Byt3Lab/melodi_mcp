@@ -5,7 +5,7 @@ from base.components import admin_layout
 from ..services.tool_registry import ToolRegistry
 from ..services.auditor import MCPAuditor
 from ..services.api_key_service import MCPApiKeyService
-from ..config import CONTRACT_VERSION, MCP_INTERNAL_KEY
+from ..config import CONTRACT_VERSION, MCP_INTERNAL_KEY, MCP_SERVER_URL, MCP_SERVER_API_KEY
 
 
 class MCPWebController:
@@ -233,6 +233,8 @@ class MCPWebController:
             "current_user_is_sudo": is_sudo,
             "current_user_permissions": user_permissions,
             "contract_version": CONTRACT_VERSION,
+            "mcp_server_url": MCP_SERVER_URL,
+            "mcp_api_key": MCP_SERVER_API_KEY,
             "newly_created_key": newly_created_key,
             "message": message,
             "message_type": message_type,
