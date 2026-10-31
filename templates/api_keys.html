@@ -4,7 +4,7 @@
     <div>
       <h1 class="ds-h2 mb-1">{{ t('user_tokens_title', 'Mes Tokens MCP (Connexion Agent IA)') }}</h1>
       <p class="ds-text-muted mb-0">
-        {{ t('user_tokens_subtitle', 'Générez un token personnel (valable 1 semaine par défaut) pour connecter votre agent IA avec vos permissions MELODI.') }}
+        {{ t('user_tokens_subtitle', 'Générez un jeton JWT personnel (valable entre 1h et 72h max) pour connecter votre agent IA via un en-tête unique Authorization.') }}
       </p>
     </div>
     <div class="ds-flex ds-items-center ds-gap-2">
@@ -82,14 +82,13 @@
       <p class="ds-text-xs ds-text-muted mb-2">
         Collez ce bloc dans votre fichier de configuration MCP (ex: <code>.cursor/mcp.json</code> ou <code>claude_desktop_config.json</code>) :
       </p>
-      <textarea id="mcpConfigSnippet" class="form-control font-monospace ds-text-xs w-100" rows="11" readonly style="background: #f8fafc; resize: vertical;">{
+      <textarea id="mcpConfigSnippet" class="form-control font-monospace ds-text-xs w-100" rows="10" readonly style="background: #f8fafc; resize: vertical;">{
   "mcpServers": {
     "melodi": {
       "url": "{{ mcp_server_url or 'http://localhost:8765/mcp' }}",
       "type": "http",
       "headers": {
-        "Authorization": "Bearer {{ newly_created_key }}",
-        "X-MCP-API-KEY": "{{ mcp_api_key or 'mon-super-token-mcp-securise-2026' }}"
+        "Authorization": "Bearer {{ newly_created_key }}"
       }
     }
   }
@@ -109,11 +108,11 @@
 
   <!-- Section Création & Liste des Tokens de l'utilisateur -->
   <div class="ds-grid ds-grid-cols-1 md:ds-grid-cols-3 ds-gap-4 mb-4">
-    <!-- Formulaire de création d'un token personnel (1 semaine par défaut) -->
+    <!-- Formulaire de création d'un token personnel (1h à 72h max) -->
     <div class="ds-card p-4 md:ds-col-span-1">
-      <h3 class="ds-h4 mb-2">{{ t('create_user_token_title', 'Créer un Token pour mon Agent') }}</h3>
+      <h3 class="ds-h4 mb-2">{{ t('create_user_token_title', 'Créer un Jeton pour mon Agent') }}</h3>
       <p class="ds-text-xs ds-text-muted mb-3">
-        {{ t('create_user_token_desc', 'Ce token authentifie votre agent IA en votre nom. À chaque requête, le middleware de melodi_mcp vérifie votre token et contrôle que vous possédez les permissions requises par le tool.') }}
+        {{ t('create_user_token_desc', 'Ce jeton JWT unique intègre vos identifiants et la clé MCP. À chaque requête, melodi_mcp_server valide sa signature et contrôle vos permissions.') }}
       </p>
       <form method="POST" action="/admin/melodi_mcp/keys">
         <input type="hidden" name="action" value="create">
@@ -124,13 +123,13 @@
         </div>
 
         <div class="mb-4">
-          <label class="ds-label mb-1">{{ t('key_expires_in_days_label', 'Durée de validité') }}</label>
-          <select name="expires_in_days" class="ds-select w-100">
-            <option value="30" selected>{{ t('duration_30_days', '1 mois (30 jours - Recommandé)') }}</option>
-            <option value="90">{{ t('duration_90_days', '3 mois (90 jours)') }}</option>
-            <option value="14">{{ t('duration_14_days', '2 semaines (14 jours)') }}</option>
-            <option value="7">{{ t('duration_7_days', '1 semaine (7 jours)') }}</option>
-            <option value="1">{{ t('duration_1_day', '24 heures (1 jour)') }}</option>
+          <label class="ds-label mb-1">{{ t('key_expires_in_hours_label', 'Durée de validité (1h à 72h max)') }}</label>
+          <select name="expires_in_hours" class="ds-select w-100">
+            <option value="24" selected>{{ t('duration_24h', '24 heures (1 jour - Recommandé)') }}</option>
+            <option value="1">{{ t('duration_1h', '1 heure') }}</option>
+            <option value="8">{{ t('duration_8h', '8 heures') }}</option>
+            <option value="48">{{ t('duration_48h', '48 heures (2 jours)') }}</option>
+            <option value="72">{{ t('duration_72h', '72 heures (3 jours - Maximum)') }}</option>
           </select>
           <span class="ds-text-xs ds-text-muted mt-1 d-block">
             {{ t('token_owner_info', 'Associé automatiquement au compte :') }} <strong>{{ current_username }}</strong>
@@ -139,7 +138,7 @@
 
         <button type="submit" class="ds-btn ds-btn-primary w-100">
           <img src="/static_base_icons?name=key&fill=white" style="width: 14px; height: 14px; vertical-align: middle;" alt="">
-          <span>{{ t('generate_user_token_button', 'Générer mon Token (30 jours)') }}</span>
+          <span>{{ t('generate_user_token_button', 'Générer mon Jeton JWT') }}</span>
         </button>
       </form>
     </div>
@@ -151,7 +150,7 @@
           <h3 class="ds-h4 mb-0">{{ t('my_active_tokens', 'Mes Tokens Utilisateur') }}</h3>
           <span class="ds-badge ds-badge-primary">{{ keys|length }}</span>
         </div>
-        <span class="ds-text-xs ds-text-muted">{{ t('auth_header_info', 'En-têtes : X-Internal-MCP-Key (Serveur) + X-User-MCP-Key (Utilisateur)') }}</span>
+        <span class="ds-text-xs ds-text-muted">{{ t('auth_header_info', 'En-tête unique : Authorization: Bearer <jwt>') }}</span>
       </div>
 
       <div class="ds-table-responsive">
@@ -242,21 +241,21 @@
     </div>
   </div>
 
-  <!-- Guide d'intégration des en-têtes X-MCP-API-KEY & Authorization -->
+  <!-- Guide d'intégration : En-tête unique Authorization: Bearer <jwt> -->
   <div class="ds-card p-4">
-    <h3 class="ds-h4 mb-3">{{ t('integration_headers_title', 'Authentification : Serveur MCP et Utilisateur') }}</h3>
+    <h3 class="ds-h4 mb-3">{{ t('integration_headers_title', 'Authentification : En-tête unique Authorization') }}</h3>
     <div class="ds-grid ds-grid-cols-1 md:ds-grid-cols-2 ds-gap-4">
       <div>
-        <h5 class="ds-h5 mb-2">{{ t('dual_auth_title', 'Double Authentification Requise') }}</h5>
+        <h5 class="ds-h5 mb-2">{{ t('single_header_title', 'Architecture Sécurisée JWT') }}</h5>
         <ul class="ds-text-sm ds-text-muted mb-0">
           <li class="mb-2">
-            <code>X-MCP-API-KEY</code> : Clé d'infrastructure sécurisant l'instance du serveur MCP (<code>melodi_mcp_server</code>).
+            <code>Authorization: Bearer &lt;token&gt;</code> : Jeton JWT auto-porteur contenant votre identifiant utilisateur (<code>user_id</code>), l'identifiant du token (<code>token_id</code>), l'empreinte de la clé MCP (<code>mcp_api_key</code>) et l'expiration (<code>exp</code>).
           </li>
           <li class="mb-2">
-            <code>Authorization: Bearer &lt;token&gt;</code> : Transmet votre token personnel d'agent IA (<code>mcp_live_...</code>). Le serveur MCP et MELODI vérifient ce token pour contrôler vos permissions.
+            <strong>Durée de vie maîtrisée :</strong> Validité maximale de 72h. Tout jeton dépassant 72h est automatiquement rejeté.
           </li>
           <li>
-            <code>X-Internal-MCP-Key</code> : Clé de service interne entre le serveur MCP et MELODI ERP.
+            <strong>Révocation instantanée :</strong> Lors de la suspension ou suppression d'un token dans MELODI, un signal de révocation est immédiatement transmis à <code>melodi_mcp_server</code>.
           </li>
         </ul>
       </div>
@@ -268,8 +267,7 @@
       "url": "{{ mcp_server_url or 'http://localhost:8765/mcp' }}",
       "type": "http",
       "headers": {
-        "Authorization": "Bearer &lt;VOTRE_TOKEN_MCP&gt;",
-        "X-MCP-API-KEY": "{{ mcp_api_key or 'mon-super-token-mcp-securise-2026' }}"
+        "Authorization": "Bearer &lt;VOTRE_JETON_JWT&gt;"
       }
     }
   }

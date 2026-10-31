@@ -283,17 +283,26 @@ class MCPAPIController:
                 body = request.json
 
             name = (body.get("name") or f"Token MCP ({user_ctx.get('username', user_id)})").strip()
+            raw_hours = body.get("expires_in_hours")
+            raw_days = body.get("expires_in_days")
             try:
-                expires_in_days = int(body.get("expires_in_days", 7))
+                if raw_hours is not None:
+                    expires_in_hours = int(raw_hours)
+                elif raw_days is not None:
+                    expires_in_hours = int(raw_days) * 24
+                else:
+                    expires_in_hours = 24
             except (ValueError, TypeError):
-                expires_in_days = 7
+                expires_in_hours = 24
+
+            expires_in_hours = max(1, min(72, expires_in_hours))
 
             key_obj, raw_key = await api_key_service.create_key(
                 name=name,
                 role="user",
                 permissions="*",
                 created_by=user_id,
-                expires_in_days=expires_in_days,
+                expires_in_hours=expires_in_hours,
             )
             if not key_obj:
                 return response.render_json({

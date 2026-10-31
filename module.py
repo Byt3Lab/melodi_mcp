@@ -31,6 +31,19 @@ class MelodiMCPModule(ApplicationModule):
         if self.app and hasattr(self.app, "db") and self.app.db:
             try:
                 await self.app.db.create_all([MCPAuditLogModel, MCPApiKeyModel])
+                # Migration de schéma : assurer que key est TEXT et key_prefix VARCHAR(100) pour les JWT
+                from sqlalchemy import text
+                from .config import MCPTables
+                async with self.app.db.get_session() as s:
+                    try:
+                        await s.execute(text(f"ALTER TABLE {MCPTables.API_KEYS} ALTER COLUMN key TYPE text;"))
+                        await s.execute(text(f"ALTER TABLE {MCPTables.API_KEYS} ALTER COLUMN key_prefix TYPE character varying(100);"))
+                        if hasattr(s, "commit"):
+                            res = s.commit()
+                            if inspect.isawaitable(res):
+                                await res
+                    except Exception:
+                        pass
             except Exception as e:
                 print(f"[melodi_mcp] Erreur lors des migrations dev: {e}")
 

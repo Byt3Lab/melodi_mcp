@@ -55,6 +55,11 @@ async def resolve_mcp_user(request: Request, service_cls=None) -> Optional[dict[
 
     auth_header = _get_header("Authorization")
     internal_key_header = _get_header("X-Internal-MCP-Key")
+    melodi_user_id_header = (
+        _get_header("X-Melodi-User-ID")
+        or _get_header("X-Melodi-User-Id")
+        or _get_header("X-Melodi-User")
+    )
 
     query = getattr(request, "query", None)
     if query is None or not hasattr(query, "get"):
@@ -93,24 +98,58 @@ async def resolve_mcp_user(request: Request, service_cls=None) -> Optional[dict[
     if isinstance(current_internal_key, str) and current_internal_key:
         internal_keys.add(current_internal_key)
 
-    # Vérification de l'authentification serveur MCP (X-Internal-MCP-Key)
+    # Vérification de l'authentification serveur MCP (X-Internal-MCP-Key ou Bearer token de service)
     is_server_call = False
     if internal_key_header and internal_key_header in internal_keys:
         is_server_call = True
     elif token and token in internal_keys:
         is_server_call = True
 
+    # Si c'est un appel de service MCP avec identification directe de l'utilisateur (X-Melodi-User-ID)
+    if is_server_call and melodi_user_id_header:
+        user_id = melodi_user_id_header.strip()
+        user = None
+        if app and hasattr(app, "module_manager") and app.module_manager:
+            try:
+                from base.repositories.user_repository import UserRepository
+                base_mod = app.module_manager.get_module("base") if hasattr(app.module_manager, "get_module") else None
+                if not base_mod and hasattr(app.module_manager, "modules"):
+                    base_mod = app.module_manager.modules.get("base")
+                if base_mod:
+                    user = await UserRepository(base_mod).get_user_by_id(user_id)
+                    if user is not None and not getattr(user, "is_active", True):
+                        return None
+            except Exception:
+                pass
+
+        permissions_map = app.cache.get("user_permissions") or {} if app and hasattr(app, "cache") and app.cache else {}
+        user_perms = list(permissions_map.get(user_id, []))
+        branches_map = app.cache.get("user_branches") or {} if app and hasattr(app, "cache") and app.cache else {}
+        user_branches = branches_map.get(user_id, [])
+        active_branch = user_branches[0] if user_branches else None
+        is_sudo = bool(getattr(user, "is_sudo", False)) if user else False
+        username = getattr(user, "username", None) or user_id
+
+        return {
+            "user_id": user_id,
+            "username": username,
+            "is_sudo": is_sudo,
+            "permissions": user_perms,
+            "active_branch": active_branch,
+            "auth_type": "jwt_user",
+            "server_authenticated": True,
+        }
+
     # Clé / Token utilisateur candidat
     candidate_user_key = user_key_header.strip() if isinstance(user_key_header, str) and user_key_header.strip() else ""
     if not candidate_user_key and token and token not in internal_keys:
         candidate_user_key = token
-    # Support rétrocompatible : si X-Internal-MCP-Key contient une clé API spécifique
     if not candidate_user_key and internal_key_header and not is_server_call:
         candidate_user_key = internal_key_header
 
     # Si un token utilisateur (X-User-MCP-Key ou Bearer) est fourni :
     if candidate_user_key and isinstance(candidate_user_key, str) and candidate_user_key.strip():
-        # A. Vérification comme token MCP utilisateur (généré par MCPApiKeyService, 7 jours par défaut)
+        # A. Vérification comme token MCP utilisateur (JWT ou clé en base)
         try:
             verified = await api_key_service.verify_key(candidate_user_key)
             if verified:

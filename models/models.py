@@ -51,8 +51,8 @@ class MCPApiKeyModel(BaseModel):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(150))
-    key: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    key_prefix: Mapped[str] = mapped_column(String(30))
+    key: Mapped[str] = mapped_column(Text)
+    key_prefix: Mapped[str] = mapped_column(String(100), index=True)
     role: Mapped[str] = mapped_column(String(50), default="service")
     permissions: Mapped[str] = mapped_column(Text, default="*")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
@@ -62,12 +62,13 @@ class MCPApiKeyModel(BaseModel):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
-    def to_dict(self) -> dict:
+    def to_dict(self, mask_key: bool = False) -> dict:
         return {
             "id": self.id,
             "name": self.name,
-            "key": self.key,
+            "key": self.key_prefix if mask_key else self.key,
             "key_prefix": self.key_prefix,
+            "token_id": self.key_prefix,
             "role": self.role,
             "permissions": [p.strip() for p in self.permissions.split(",") if p.strip()] if self.permissions else [],
             "is_active": self.is_active,

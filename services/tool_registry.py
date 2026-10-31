@@ -86,11 +86,16 @@ class ToolRegistry:
 
     def is_module_active(self, module_name: str) -> bool:
         """Vérifie si le module propriétaire est actif dans MELODI."""
+        # Le module 'base' est le socle applicatif obligatoire de MELODI et est toujours actif
+        if not module_name or module_name == "base":
+            return True
         if not self.app or not hasattr(self.app, "module_manager"):
             return True
         mm = self.app.module_manager
         if hasattr(mm, "isOn"):
             return mm.isOn(module_name)
+        if hasattr(mm, "isLoad"):
+            return mm.isLoad(module_name)
         return True
 
     def list_tools(

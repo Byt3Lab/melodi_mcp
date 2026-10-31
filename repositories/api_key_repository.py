@@ -2,7 +2,7 @@ from typing import Optional, List, Any
 from datetime import datetime, timezone
 import inspect
 
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, or_
 from ..models.models import MCPApiKeyModel
 
 
@@ -29,11 +29,12 @@ class MCPApiKeyRepository:
         permissions: str = "*",
         created_by: Optional[str] = None,
         expires_at: Optional[datetime] = None,
+        key_prefix: Optional[str] = None,
         session=None,
     ) -> Optional[MCPApiKeyModel]:
         """Enregistre une nouvelle clé API."""
         now = datetime.now(timezone.utc).replace(tzinfo=None)
-        prefix = mask_key(key)
+        prefix = key_prefix.strip() if key_prefix and key_prefix.strip() else mask_key(key)
         api_key_obj = MCPApiKeyModel(
             name=name.strip(),
             key=key.strip(),
@@ -72,7 +73,8 @@ class MCPApiKeyRepository:
         try:
             async with self.app.db.get_session() as s:
                 return await _do_create(s)
-        except Exception:
+        except Exception as e:
+            print(f"[melodi_mcp] Erreur create_key: {e}")
             return None
 
     async def get_by_id(self, key_id: int, session=None) -> Optional[MCPApiKeyModel]:
@@ -97,8 +99,9 @@ class MCPApiKeyRepository:
             return None
 
     async def get_by_key(self, key: str, session=None) -> Optional[MCPApiKeyModel]:
-        """Récupère une clé API par sa valeur secrète exacte."""
-        stmt = select(MCPApiKeyModel).where(MCPApiKeyModel.key == key.strip())
+        """Récupère une clé API par sa valeur secrète exacte ou son token_id."""
+        clean = key.strip()
+        stmt = select(MCPApiKeyModel).where(or_(MCPApiKeyModel.key == clean, MCPApiKeyModel.key_prefix == clean))
 
         async def _do_get(s):
             res = await s.execute(stmt)

@@ -92,8 +92,37 @@ class MCPWebController:
                 else:
                     message = "Veuillez fournir une clé d'authentification valide ou générer une nouvelle valeur."
                     message_type = "danger"
+            elif action == "update_jwt_secret":
+                new_secret = (form.get("jwt_secret") or "").strip()
+                if not new_secret and form.get("generate") == "1":
+                    import secrets
+                    new_secret = secrets.token_urlsafe(32)
+                if new_secret:
+                    await api_key_service.update_jwt_secret(new_secret)
+                    message = "Clé secrète de chiffrement JWT mise à jour avec succès."
+                    message_type = "success"
+                else:
+                    message = "Veuillez fournir une clé secrète JWT valide."
+                    message_type = "danger"
+            elif action == "update_server":
+                new_url = (form.get("mcp_server_url") or "").strip()
+                new_mcp_api_key = (form.get("mcp_server_api_key") or "").strip()
+                if new_url:
+                    await api_key_service.update_server_url(new_url)
+                if new_mcp_api_key:
+                    await api_key_service.update_server_api_key(new_mcp_api_key)
+                message = "Paramètres de connexion au serveur MCP mis à jour avec succès."
+                message_type = "success"
 
         internal_key = api_key_service.get_internal_key()
+        jwt_secret = api_key_service.get_jwt_secret()
+        mcp_server_url = api_key_service.get_server_url()
+        mcp_server_api_key = api_key_service.get_server_api_key()
+
+        # Construction dynamique de l'URL d'API interne sans suffixe /internal
+        host = getattr(request, "host", "") or "localhost:5000"
+        scheme = getattr(request, "scheme", "http") or "http"
+        internal_api_url = f"{scheme}://{host}/api/melodi_mcp"
 
         manifest_data = {
             "contract_version": CONTRACT_VERSION,
@@ -109,7 +138,8 @@ class MCPWebController:
             "server_info": {
                 "provider": "MELODI ERP melodi_mcp",
                 "auth_modes": ["bearer_jwt", "service_key"],
-                "internal_endpoint": "/api/melodi_mcp/internal",
+                "internal_endpoint": "/api/melodi_mcp",
+                "api_url": internal_api_url,
             }
         }
 
@@ -117,6 +147,11 @@ class MCPWebController:
             "contract_version": CONTRACT_VERSION,
             "catalog_revision": current_rev,
             "internal_key": internal_key,
+            "internal_api_url": internal_api_url,
+            "internal_endpoint": "/api/melodi_mcp",
+            "jwt_secret": jwt_secret,
+            "mcp_server_url": mcp_server_url,
+            "mcp_server_api_key": mcp_server_api_key,
             "manifest_json": json.dumps(manifest_data, indent=2, ensure_ascii=False),
             "message": message,
             "message_type": message_type,
@@ -178,22 +213,30 @@ class MCPWebController:
 
             if action == "create":
                 name = (form.get("name") or "").strip() or f"Token MCP - {username}"
+                raw_hours = form.get("expires_in_hours")
+                raw_days = form.get("expires_in_days")
                 try:
-                    raw_exp = form.get("expires_in_days", 30)
-                    expires_in_days = int(raw_exp) if raw_exp not in (None, "") else 30
+                    if raw_hours not in (None, ""):
+                        expires_in_hours = int(raw_hours)
+                    elif raw_days not in (None, ""):
+                        expires_in_hours = int(raw_days) * 24
+                    else:
+                        expires_in_hours = 24
                 except (ValueError, TypeError):
-                    expires_in_days = 30
+                    expires_in_hours = 24
+
+                expires_in_hours = max(1, min(72, expires_in_hours))
 
                 key_obj, raw_key = await api_key_service.create_key(
                     name=name,
                     role="user",
                     permissions="*",
                     created_by=user_id,
-                    expires_in_days=expires_in_days,
+                    expires_in_hours=expires_in_hours,
                 )
                 if key_obj:
                     newly_created_key = raw_key
-                    message = f"Token personnel '{name}' généré pour {username} (valable {expires_in_days} jours)."
+                    message = f"Token personnel '{name}' généré pour {username} (valable {expires_in_hours}h)."
                     message_type = "success"
                 else:
                     message = "Erreur lors de la génération du token utilisateur."
@@ -233,8 +276,8 @@ class MCPWebController:
             "current_user_is_sudo": is_sudo,
             "current_user_permissions": user_permissions,
             "contract_version": CONTRACT_VERSION,
-            "mcp_server_url": MCP_SERVER_URL,
-            "mcp_api_key": MCP_SERVER_API_KEY,
+            "mcp_server_url": api_key_service.get_server_url(),
+            "mcp_api_key": api_key_service.get_server_api_key(),
             "newly_created_key": newly_created_key,
             "message": message,
             "message_type": message_type,
