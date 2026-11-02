@@ -77,6 +77,7 @@ class MCPWebController:
 
         message = None
         message_type = None
+        action = None
 
         if request.method == "POST":
             form = request.form or {}
@@ -206,6 +207,7 @@ class MCPWebController:
         newly_created_key = None
         message = None
         message_type = None
+        action = None
 
         if request.method == "POST":
             form = request.form or {}
@@ -284,4 +286,220 @@ class MCPWebController:
         })
 
         page = Page("Mes Tokens MCP (Agent IA)", admin_layout(content))
+        return await response.render_page(page)
+
+    @staticmethod
+    async def admin_oauth_authorize(request: Request, response: Response):
+        """Page d'autorisation et consentement OAuth 2.0 pour assistants IA."""
+        app = getattr(request, "app", None) or (getattr(request.module, "app", None) if hasattr(request, "module") else None)
+        from ..services.oauth_service import MCPOAuthService
+        oauth_service = MCPOAuthService.get_instance(app=app)
+
+        query = getattr(request, "query", {}) or {}
+        form = getattr(request, "form", {}) or {}
+        params = {**query, **form}
+
+        client_id = (params.get("client_id") or "ai_client").strip()
+        redirect_uri = (params.get("redirect_uri") or "").strip()
+        state = params.get("state")
+        code_challenge = params.get("code_challenge")
+        code_challenge_method = params.get("code_challenge_method")
+
+        # Identification de l'utilisateur connecté
+        user_payload = None
+        if hasattr(request, "data_context") and isinstance(request.data_context, dict):
+            user_payload = request.data_context.get("user_payload")
+
+        if not user_payload and hasattr(request, "get_session") and callable(request.get_session):
+            raw_session = request.get_session("user_payload")
+            if isinstance(raw_session, (str, dict)):
+                try:
+                    user_payload = json.loads(raw_session) if isinstance(raw_session, str) else raw_session
+                except Exception:
+                    user_payload = None
+
+        if not user_payload:
+            try:
+                from quart import session as quart_session
+                raw_q = quart_session.get("user_payload")
+                if isinstance(raw_q, (str, dict)):
+                    user_payload = json.loads(raw_q) if isinstance(raw_q, str) else raw_q
+            except Exception:
+                user_payload = None
+
+        if not user_payload or not user_payload.get("user_id"):
+            import urllib.parse
+            full_path = request.path
+            if getattr(request, "query_string", None):
+                full_path += f"?{request.query_string}"
+            return response.redirect(f"/auth/login?redirect={urllib.parse.quote(full_path)}")
+
+        user_id = str(user_payload["user_id"])
+        username = str(user_payload.get("username") or user_payload.get("email") or user_id)
+
+        # Traitement POST : approbation ou refus
+        if request.method == "POST":
+            action = form.get("action")
+            if action == "deny":
+                sep = "&" if "?" in redirect_uri else "?"
+                target = f"{redirect_uri}{sep}error=access_denied&error_description=Consentement+refuse"
+                if state:
+                    target += f"&state={state}"
+                return response.redirect(target)
+
+            if not redirect_uri:
+                content = Component(module_name="melodi_mcp", name="oauth_authorize", context={
+                    "client_id": client_id,
+                    "username": username,
+                    "user_id": user_id,
+                    "redirect_uri": redirect_uri,
+                    "state": state,
+                    "code_challenge": code_challenge,
+                    "code_challenge_method": code_challenge_method,
+                    "error_message": "Paramètre obligatoire 'redirect_uri' manquant.",
+                })
+                page = Page("Autorisation Assistant IA", admin_layout(content))
+                return await response.render_page(page)
+
+            code = oauth_service.create_authorization_code(
+                client_id=client_id,
+                redirect_uri=redirect_uri,
+                user_id=user_id,
+                code_challenge=code_challenge,
+                code_challenge_method=code_challenge_method,
+                ttl_seconds=300,
+            )
+
+            sep = "&" if "?" in redirect_uri else "?"
+            target = f"{redirect_uri}{sep}code={code}"
+            if state:
+                target += f"&state={state}"
+            return response.redirect(target)
+
+        # Affichage GET : formulaire de consentement
+        content = Component(module_name="melodi_mcp", name="oauth_authorize", context={
+            "client_id": client_id,
+            "username": username,
+            "user_id": user_id,
+            "redirect_uri": redirect_uri,
+            "state": state,
+            "code_challenge": code_challenge,
+            "code_challenge_method": code_challenge_method,
+            "error_message": None,
+        })
+        page = Page("Autorisation Assistant IA", admin_layout(content))
+        return await response.render_page(page)
+
+    @staticmethod
+    async def admin_server_dashboard(request: Request, response: Response):
+        """Page d'administration et supervision en direct du serveur MCP (melodi_mcp_server)."""
+        import time
+        import httpx
+        app = getattr(request, "app", None) or (getattr(request.module, "app", None) if hasattr(request, "module") else None)
+        registry = ToolRegistry.get_instance(app=app)
+        api_key_service = MCPApiKeyService(app=app)
+
+        mcp_server_url = api_key_service.get_server_url() or "http://localhost:8765/mcp"
+        clean_url = mcp_server_url.rstrip("/")
+        for suffix in ("/mcp", "/sse"):
+            if clean_url.endswith(suffix):
+                clean_url = clean_url[:-len(suffix)].rstrip("/")
+                break
+        server_base_url = clean_url or "http://localhost:8765"
+
+        message = None
+        message_type = None
+        action = None
+
+        if request.method == "POST":
+            form = request.form or {}
+            action = form.get("action")
+            if action == "force_sync":
+                try:
+                    async with httpx.AsyncClient(timeout=4.0) as client:
+                        internal_key = api_key_service.get_internal_key()
+                        headers = {
+                            "Authorization": f"Bearer {internal_key}",
+                            "X-Internal-MCP-Key": internal_key,
+                        }
+                        # Appel de l'endpoint dédié de synchronisation
+                        sync_resp = await client.post(f"{server_base_url}/api/mcp/sync", headers=headers)
+                        if sync_resp.status_code == 404:
+                            sync_resp = await client.post(f"{server_base_url}/admin/api/sync", headers=headers)
+                        if sync_resp.status_code == 200:
+                            sdata = sync_resp.json() if hasattr(sync_resp, "json") else {}
+                            cnt = sdata.get("tools_count", "N/A")
+                            message = f"Synchronisation réussie ! {cnt} outils synchronisés sur le serveur MCP."
+                            message_type = "success"
+                        else:
+                            message = f"Le serveur MCP a répondu avec le statut {sync_resp.status_code} lors de la synchronisation."
+                            message_type = "warning"
+                except Exception as e:
+                    message = f"Impossible de joindre le serveur MCP pour forcer la synchronisation : {e}"
+                    message_type = "danger"
+            elif action == "ping":
+                # Le test est automatiquement réexécuté ci-dessous
+                pass
+
+        # Test de santé et métriques en direct
+        is_online = False
+        latency_ms = None
+        server_status = "UNHEALTHY"
+        server_tools_count = 0
+        server_revision = None
+        server_uptime = None
+        server_version = "0.1.0"
+        error_detail = None
+
+        start_time = time.monotonic()
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                health_resp = await client.get(f"{server_base_url}/health")
+                elapsed = time.monotonic() - start_time
+                latency_ms = round(elapsed * 1000, 1)
+
+                if health_resp.status_code == 200:
+                    is_online = True
+                    hdata = health_resp.json()
+                    server_status = hdata.get("status", "HEALTHY")
+                    server_tools_count = hdata.get("tools_count", 0)
+                    server_revision = hdata.get("catalog_revision") or hdata.get("revision")
+                    server_uptime = hdata.get("uptime") or "En ligne"
+                    server_version = hdata.get("version", "0.1.0")
+                    if action == "ping":
+                        message = f"Connexion réussie au serveur MCP ! Latence mesurée : {latency_ms} ms."
+                        message_type = "success"
+                else:
+                    server_status = "DEGRADED"
+                    error_detail = f"Code HTTP {health_resp.status_code}"
+                    if action == "ping":
+                        message = f"Le serveur MCP a répondu avec une anomalie : {health_resp.status_code}."
+                        message_type = "warning"
+        except Exception as e:
+            is_online = False
+            server_status = "UNHEALTHY"
+            error_detail = "Impossible de se connecter à " + server_base_url
+            if action == "ping":
+                message = f"Échec de la connexion au serveur MCP ({server_base_url}) : {e}"
+                message_type = "danger"
+
+        content = Component(module_name="melodi_mcp", name="server_dashboard", context={
+            "mcp_server_url": mcp_server_url,
+            "server_base_url": server_base_url,
+            "is_online": is_online,
+            "latency_ms": latency_ms or 0,
+            "server_status": server_status,
+            "server_tools_count": server_tools_count,
+            "total_erp_tools": registry.count(enabled_only=True),
+            "catalog_revision": registry.get_revision(),
+            "server_revision": server_revision,
+            "server_uptime": server_uptime or "-",
+            "server_version": server_version,
+            "error_detail": error_detail,
+            "jwt_secret_set": bool(api_key_service.get_jwt_secret()),
+            "mcp_api_key_set": bool(api_key_service.get_server_api_key()),
+            "message": message,
+            "message_type": message_type,
+        })
+        page = Page("Administration Serveur MCP", admin_layout(content))
         return await response.render_page(page)

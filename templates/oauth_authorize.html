@@ -1,0 +1,74 @@
+<div class="ds-container p-4" style="max-width: 680px; margin: 40px auto;">
+  <div class="ds-card p-4 shadow-sm border">
+    <!-- En-tête -->
+    <div class="text-center mb-4 pb-3 border-bottom">
+      <div style="font-size: 42px; margin-bottom: 8px;">🤖 ⇄ 🏢</div>
+      <h2 class="ds-h3 mb-2">Autoriser l'Assistant IA</h2>
+      <p class="ds-text-muted mb-0">
+        Une application ou un agent IA demande l'autorisation d'accéder à vos outils sur <strong>MELODI ERP</strong>.
+      </p>
+    </div>
+
+    <!-- Alerte d'erreur éventuelle -->
+    {% if error_message %}
+    <div class="alert alert-danger mb-4 p-3 rounded" style="background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; color: #dc2626;">
+      <strong>Erreur :</strong> {{ error_message }}
+    </div>
+    {% endif %}
+
+    <!-- Détails de la demande -->
+    <div class="mb-4 p-3 bg-light rounded border">
+      <div class="ds-flex ds-items-center ds-justify-between mb-2">
+        <span class="ds-text-sm text-muted">Client / Application :</span>
+        <strong class="ds-badge ds-badge-primary font-monospace">{{ client_id }}</strong>
+      </div>
+      <div class="ds-flex ds-items-center ds-justify-between mb-2">
+        <span class="ds-text-sm text-muted">Compte MELODI actif :</span>
+        <span class="ds-text-sm fw-bold text-dark">{{ username }} <span class="text-muted font-monospace">({{ user_id }})</span></span>
+      </div>
+      {% if redirect_uri %}
+      <div class="ds-flex ds-items-center ds-justify-between">
+        <span class="ds-text-sm text-muted">Redirection après accord :</span>
+        <span class="ds-text-xs font-monospace text-truncate text-muted" style="max-width: 320px;" title="{{ redirect_uri }}">{{ redirect_uri }}</span>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Périmètre des accès accordés -->
+    <div class="mb-4">
+      <h4 class="ds-h5 mb-2">Permissions accordées à l'agent IA :</h4>
+      <ul class="list-unstyled mb-0">
+        <li class="ds-flex ds-items-start ds-gap-2 mb-2">
+          <span class="text-success">✔</span>
+          <span class="ds-text-sm">Découverte et exécution des outils autorisés pour votre compte (comptabilité, facturation, projets, etc.).</span>
+        </li>
+        <li class="ds-flex ds-items-start ds-gap-2 mb-2">
+          <span class="text-success">✔</span>
+          <span class="ds-text-sm">Création d'un jeton d'accès sécurisé lié à votre identité avec traçabilité complète dans le journal d'audit.</span>
+        </li>
+        <li class="ds-flex ds-items-start ds-gap-2">
+          <span class="text-info">ℹ</span>
+          <span class="ds-text-sm text-muted">Vous pouvez révoquer cette autorisation à tout moment depuis le menu <em>Clés d'API & Sécurité</em> de MELODI ERP.</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Formulaire d'action -->
+    <form method="POST" action="/admin/melodi_mcp/oauth/authorize">
+      <input type="hidden" name="client_id" value="{{ client_id }}">
+      <input type="hidden" name="redirect_uri" value="{{ redirect_uri }}">
+      <input type="hidden" name="state" value="{{ state or '' }}">
+      <input type="hidden" name="code_challenge" value="{{ code_challenge or '' }}">
+      <input type="hidden" name="code_challenge_method" value="{{ code_challenge_method or '' }}">
+
+      <div class="ds-flex ds-items-center ds-justify-end ds-gap-3 pt-3 border-top">
+        <button type="submit" name="action" value="deny" class="ds-btn ds-btn-outline-secondary">
+          Refuser
+        </button>
+        <button type="submit" name="action" value="authorize" class="ds-btn ds-btn-primary px-4 fw-bold">
+          Autoriser la connexion
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

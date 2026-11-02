@@ -365,3 +365,91 @@ class MCPAPIController:
             "success": deleted,
             "data": {"id": token_id, "revoked": deleted},
         }, status_code=200 if deleted else 404)
+
+    @classmethod
+    async def oauth_token(cls, request: Request, response: Response):
+        """POST /api/melodi_mcp/oauth/token - Échange de code d'autorisation contre un JWT d'accès."""
+        app = getattr(request, "app", None) or (getattr(request.module, "app", None) if hasattr(request, "module") else None)
+        from ..services.oauth_service import MCPOAuthService
+        oauth_service = MCPOAuthService.get_instance(app=app)
+        api_key_service = MCPApiKeyService(app=app)
+
+        data = {}
+        if hasattr(request, "get_json") and callable(request.get_json):
+            try:
+                raw = request.get_json()
+                if isinstance(raw, dict):
+                    data = raw
+            except Exception:
+                pass
+        if not data and hasattr(request, "form") and isinstance(request.form, dict):
+            data = request.form
+        if not data and hasattr(request, "query") and isinstance(request.query, dict):
+            data = request.query
+
+        grant_type = str(data.get("grant_type") or "").strip()
+        if grant_type != "authorization_code":
+            return response.render_json(
+                {
+                    "error": "unsupported_grant_type",
+                    "error_description": "Seul le grant_type 'authorization_code' est supporté.",
+                },
+                status_code=400,
+            )
+
+        code = str(data.get("code") or "").strip()
+        if not code:
+            return response.render_json(
+                {"error": "invalid_request", "error_description": "Le paramètre 'code' est obligatoire."},
+                status_code=400,
+            )
+
+        client_id = str(data.get("client_id") or "ai_client").strip()
+        redirect_uri = str(data.get("redirect_uri") or "").strip() or None
+        code_verifier = str(data.get("code_verifier") or "").strip() or None
+
+        auth_record = oauth_service.consume_authorization_code(
+            code=code,
+            client_id=client_id,
+            redirect_uri=redirect_uri,
+            code_verifier=code_verifier,
+        )
+
+        if not auth_record:
+            return response.render_json(
+                {
+                    "error": "invalid_grant",
+                    "error_description": "Code d'autorisation invalide, expiré ou échec de la validation PKCE.",
+                },
+                status_code=400,
+            )
+
+        user_id = auth_record["user_id"]
+        # Création et signature d'un token JWT officiel pour l'utilisateur
+        key_obj, raw_token = await api_key_service.create_key(
+            name=f"OAuth - {client_id}",
+            role="user",
+            permissions="*",
+            created_by=user_id,
+            expires_in_hours=24,
+        )
+
+        if not raw_token:
+            return response.render_json(
+                {"error": "server_error", "error_description": "Impossible de générer le jeton d'accès."},
+                status_code=500,
+            )
+
+        token_id = getattr(key_obj, "key_prefix", None) or "mcp_token"
+
+        return response.render_json(
+            {
+                "access_token": raw_token,
+                "token_type": "Bearer",
+                "expires_in": 86400,
+                "scope": "mcp:all",
+                "user_id": user_id,
+                "token_id": token_id,
+            },
+            status_code=200,
+        )

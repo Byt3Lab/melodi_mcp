@@ -1,0 +1,207 @@
+<div class="ds-container-fluid p-4">
+  <!-- En-tête de page -->
+  <div class="ds-flex ds-items-center ds-justify-between mb-4 flex-wrap ds-gap-2">
+    <div>
+      <h1 class="ds-h2 mb-1">⚡ Administration du Serveur MCP</h1>
+      <p class="ds-text-muted mb-0">
+        Supervision en direct, liaison réseau et pilotage de l'instance <code>melodi_mcp_server</code>.
+      </p>
+    </div>
+    <div class="ds-flex ds-items-center ds-gap-2">
+      <a href="/admin/melodi_mcp" class="ds-btn ds-btn-sm ds-btn-secondary">
+        ← Catalogue Outils
+      </a>
+      <a href="/admin/melodi_mcp/keys" class="ds-btn ds-btn-sm ds-btn-outline-primary">
+        Mes Tokens MCP
+      </a>
+      <a href="/admin/melodi_mcp/manifest" class="ds-btn ds-btn-sm ds-btn-secondary">
+        Configuration & Clés ⚙️
+      </a>
+    </div>
+  </div>
+
+  <!-- Messages Flash standard -->
+  {% if message %}
+  <div class="ds-card p-3 mb-4 border border-{{ message_type }}" style="background: {% if message_type == 'success' %}rgba(16, 185, 129, 0.08){% else %}rgba(239, 68, 68, 0.08){% endif %};">
+    <div class="ds-text-sm fw-semibold text-{{ message_type }}">
+      {{ message }}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Cartes d'indicateurs temps réel (KPIs du Serveur MCP) -->
+  <div class="ds-grid ds-grid-cols-1 md:ds-grid-cols-4 ds-gap-4 mb-4">
+    <!-- Statut Serveur -->
+    <div class="ds-card p-3">
+      <div class="ds-text-muted ds-text-sm mb-1">État du Serveur MCP</div>
+      <div class="ds-flex ds-items-center ds-gap-2">
+        {% if server_status == 'HEALTHY' or server_status == 'healthy' %}
+          <span class="ds-badge ds-badge-success" style="font-size: 0.95rem; padding: 4px 10px;">🟢 EN LIGNE</span>
+        {% elif server_status == 'DEGRADED' or server_status == 'degraded' %}
+          <span class="ds-badge ds-badge-warning" style="font-size: 0.95rem; padding: 4px 10px;">🟡 DÉGRADÉ</span>
+        {% else %}
+          <span class="ds-badge ds-badge-danger" style="font-size: 0.95rem; padding: 4px 10px;">🔴 HORS LIGNE</span>
+        {% endif %}
+      </div>
+      <div class="ds-text-xs ds-text-muted mt-2">
+        {% if is_online %}
+          Latence : <strong class="text-success">{{ latency_ms }} ms</strong>
+        {% else %}
+          <span class="text-danger">{{ error_detail or 'Serveur non joignable' }}</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Outils sur le Serveur MCP -->
+    <div class="ds-card p-3">
+      <div class="ds-text-muted ds-text-sm mb-1">Outils sur le Serveur</div>
+      <div class="ds-h3 ds-font-bold text-primary mb-0">
+        {{ server_tools_count if is_online else '-' }}
+        <span class="ds-text-xs text-muted fw-normal">/ {{ total_erp_tools }} outils ERP</span>
+      </div>
+      <div class="ds-text-xs ds-text-muted mt-2">
+        Révision : <code class="font-monospace">{{ server_revision or catalog_revision }}</code>
+      </div>
+    </div>
+
+    <!-- Temps de fonctionnement -->
+    <div class="ds-card p-3">
+      <div class="ds-text-muted ds-text-sm mb-1">Uptime du Serveur</div>
+      <div class="ds-h4 ds-font-bold mb-0">
+        {{ server_uptime if is_online else '-' }}
+      </div>
+      <div class="ds-text-xs ds-text-muted mt-2">
+        Version MCP : <strong>{{ server_version or '0.1.0' }}</strong>
+      </div>
+    </div>
+
+    <!-- URL d'écoute MCP -->
+    <div class="ds-card p-3">
+      <div class="ds-text-muted ds-text-sm mb-1">Point de Contact MCP</div>
+      <div class="ds-text-xs ds-font-mono text-truncate text-dark fw-bold mb-0" title="{{ mcp_server_url }}">
+        {{ mcp_server_url }}
+      </div>
+      <div class="ds-text-xs ds-text-muted mt-2">
+        Transport : <strong>HTTP Streamable / SSE</strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- Actions de gestion du serveur -->
+  <div class="ds-card p-4 mb-4">
+    <div class="ds-flex ds-items-center ds-justify-between mb-3 flex-wrap ds-gap-2">
+      <h3 class="ds-h4 mb-0">Actions & Commandes de Pilotage</h3>
+      <span class="ds-text-xs text-muted">Dernière vérification : il y a quelques secondes</span>
+    </div>
+
+    <div class="ds-flex ds-items-center ds-gap-3 flex-wrap">
+      <!-- Tester la connexion -->
+      <form method="POST" action="/admin/melodi_mcp/server">
+        <input type="hidden" name="action" value="ping">
+        <button type="submit" class="ds-btn ds-btn-primary">
+          <img src="/static_base_icons?name=refresh&fill=white" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;" alt="">
+          Tester la connexion en direct
+        </button>
+      </form>
+
+      <!-- Forcer la resynchronisation -->
+      <form method="POST" action="/admin/melodi_mcp/server">
+        <input type="hidden" name="action" value="force_sync">
+        <button type="submit" class="ds-btn ds-btn-secondary" {% if not is_online %}disabled{% endif %}>
+          <img src="/static_base_icons?name=sync&fill=currentColor" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;" alt="">
+          Forcer la resynchronisation du catalogue
+        </button>
+      </form>
+
+      <!-- Accéder à la configuration -->
+      <a href="/admin/melodi_mcp/manifest" class="ds-btn ds-btn-outline-secondary">
+        <img src="/static_base_icons?name=settings&fill=currentColor" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;" alt="">
+        Modifier les Clés de Sécurité
+      </a>
+    </div>
+  </div>
+
+  <!-- Deux Colonnes : Détails Techniques & Intégration Client IA -->
+  <div class="ds-grid ds-grid-cols-1 md:ds-grid-cols-2 ds-gap-4">
+    <!-- Colonne 1 : Détails de la liaison -->
+    <div class="ds-card p-4">
+      <div class="ds-flex ds-items-center ds-justify-between mb-3">
+        <h4 class="ds-h4 mb-0">Détails de la Passerelle MCP</h4>
+        <span class="ds-badge ds-badge-primary">Architecture</span>
+      </div>
+
+      <div class="table-responsive">
+        <table class="ds-table w-100">
+          <tbody>
+            <tr>
+              <td class="text-muted ds-text-xs fw-bold" style="width: 40%;">URL Base Serveur :</td>
+              <td class="ds-text-xs font-monospace">{{ server_base_url }}</td>
+            </tr>
+            <tr>
+              <td class="text-muted ds-text-xs fw-bold">Endpoint Santé :</td>
+              <td class="ds-text-xs font-monospace">{{ server_base_url }}/health</td>
+            </tr>
+            <tr>
+              <td class="text-muted ds-text-xs fw-bold">Endpoint MCP SSE :</td>
+              <td class="ds-text-xs font-monospace">{{ mcp_server_url }}</td>
+            </tr>
+            <tr>
+              <td class="text-muted ds-text-xs fw-bold">Webhook Révocation :</td>
+              <td class="ds-text-xs font-monospace">{{ server_base_url }}/api/mcp/tokens/revoke</td>
+            </tr>
+            <tr>
+              <td class="text-muted ds-text-xs fw-bold">Secret JWT Partagé :</td>
+              <td class="ds-text-xs">
+                {% if jwt_secret_set %}
+                  <span class="text-success fw-bold">✔ Configuré</span>
+                {% else %}
+                  <span class="text-danger fw-bold">⚠ Non configuré</span>
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <td class="text-muted ds-text-xs fw-bold">Clé Infra MCP :</td>
+              <td class="ds-text-xs">
+                {% if mcp_api_key_set %}
+                  <span class="text-success fw-bold">✔ Configurée</span>
+                {% else %}
+                  <span class="text-warning">Facultatif</span>
+                {% endif %}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Colonne 2 : Fichier de configuration pour Clients IA -->
+    <div class="ds-card p-4">
+      <div class="ds-flex ds-items-center ds-justify-between mb-2">
+        <h4 class="ds-h4 mb-0">Configuration Client IA</h4>
+        <span class="ds-badge ds-badge-info">Cursor / VS Code</span>
+      </div>
+      <p class="ds-text-xs ds-text-muted mb-3">
+        Collez cet extrait dans votre fichier <code>.mcp.json</code> (Cursor, VS Code) pour connecter vos agents IA :
+      </p>
+
+      <div class="position-relative">
+        <pre class="p-3 bg-dark text-light rounded font-monospace ds-text-xs mb-0" style="max-height: 220px; overflow-y: auto;"><code>{
+  "mcpServers": {
+    "melodi": {
+      "type": "http",
+      "url": "{{ mcp_server_url }}",
+      "headers": {
+        "Authorization": "Bearer &lt;VOTRE_TOKEN_MCP&gt;"
+      }
+    }
+  }
+}</code></pre>
+      </div>
+      <div class="mt-2 text-end">
+        <a href="/admin/melodi_mcp/keys" class="ds-text-xs text-primary fw-bold text-decoration-none">
+          → Générer un Token MCP personnel pour mon compte
+        </a>
+      </div>
+    </div>
+  </div>
+</div>

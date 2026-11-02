@@ -17,6 +17,8 @@ PUBLIC_MCP_PATHS = {
     "/internal/manifest",
     "/revision",
     "/internal/revision",
+    "/oauth/token",
+    "/api/melodi_mcp/oauth/token",
 }
 
 
@@ -269,7 +271,7 @@ async def mcp_auth_middleware(request: Request, response: Response):
 
     user_ctx = await resolve_mcp_user(request)
     if not user_ctx:
-        if rel_path in PUBLIC_MCP_PATHS:
+        if rel_path in PUBLIC_MCP_PATHS or rel_path.endswith("/oauth/token"):
             return None
         err = AuthenticationRequiredError()
         return response.render_json(err.to_dict(), status_code=err.status_code)

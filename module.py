@@ -54,15 +54,19 @@ class MelodiMCPModule(ApplicationModule):
         # 1. Routes d'administration Web
         self.admin_router.add_route("", MCPWebController.admin_dashboard, methods=["GET"])
         self.admin_router.add_route("/", MCPWebController.admin_dashboard, methods=["GET"])
+        self.admin_router.add_route("/server", MCPWebController.admin_server_dashboard, methods=["GET", "POST"])
         self.admin_router.add_route("/audit", MCPWebController.admin_audit, methods=["GET"])
         self.admin_router.add_route("/keys", MCPWebController.admin_api_keys, methods=["GET", "POST"])
         self.admin_router.add_route("/api-keys", MCPWebController.admin_api_keys, methods=["GET", "POST"])
         self.admin_router.add_route("/manifest", MCPWebController.admin_manifest, methods=["GET", "POST"])
+        self.admin_router.add_route("/oauth/authorize", MCPWebController.admin_oauth_authorize, methods=["GET", "POST"])
 
         # 2. Middleware d'authentification MCP sur le routeur API
         self.api_router.add_middleware(mcp_auth_middleware)
 
         # 3. Routes API REST internes destinées à melodi_mcp_server et à la gestion des tokens
+        # OAuth 2.0 Token Endpoint (PKCE)
+        self.api_router.add_route("/oauth/token", MCPAPIController.oauth_token, methods=["POST"])
         # Endpoints de santé et manifeste
         self.api_router.add_route("/health", MCPAPIController.health, methods=["GET"])
         self.api_router.add_route("/manifest", MCPAPIController.manifest, methods=["GET"])
@@ -104,8 +108,9 @@ class MelodiMCPModule(ApplicationModule):
             priority=85,
             children=[
                 {"label": "Catalogue des Outils", "icon": "name=extension&fill=white", "url": "/admin/melodi_mcp"},
-                {"label": "Journal d'Audit", "icon": "name=history&fill=white", "url": "/admin/melodi_mcp/audit"},
+                {"label": "Serveur MCP (Dashboard)", "icon": "name=dns&fill=white", "url": "/admin/melodi_mcp/server"},
                 {"label": "Mes Tokens MCP", "icon": "name=key&fill=white", "url": "/admin/melodi_mcp/keys"},
+                {"label": "Journal d'Audit", "icon": "name=history&fill=white", "url": "/admin/melodi_mcp/audit"},
                 {"label": "Serveur & Manifeste", "icon": "name=cloud_sync&fill=white", "url": "/admin/melodi_mcp/manifest"},
             ]
         )
