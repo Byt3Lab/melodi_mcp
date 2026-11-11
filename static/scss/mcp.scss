@@ -1,0 +1,225 @@
+// ==============================================================================
+// MELODI ERP - Module melodi_mcp Stylesheet (SCSS)
+// ==============================================================================
+
+.mcp-spa-root {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  width: 100%;
+
+  // Onglets de navigation principale SPA
+  .mcp-nav-tabs {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 1px solid var(--ds-border, #e2e8f0);
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.75rem;
+    overflow-x: auto;
+
+    .mcp-nav-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border-radius: var(--ds-radius, 6px);
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--ds-text-muted, #64748b);
+      text-decoration: none;
+      transition: all 0.18s ease-in-out;
+      cursor: pointer;
+      border: 1px solid transparent;
+
+      &:hover {
+        color: var(--ds-text-primary, #0f172a);
+        background-color: var(--ds-surface-hover, rgba(0, 0, 0, 0.04));
+      }
+
+      &.active {
+        color: var(--ds-primary, #2563eb);
+        background-color: var(--ds-primary-subtle, rgba(37, 99, 235, 0.08));
+        border-color: var(--ds-primary-border, rgba(37, 99, 235, 0.2));
+        font-weight: 600;
+      }
+    }
+  }
+
+  // Animation pulsante pour le statut du serveur
+  .mcp-pulse-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+
+    &.healthy {
+      background-color: #10b981;
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+      animation: mcp-pulse-green 2s infinite;
+    }
+
+    &.degraded {
+      background-color: #f59e0b;
+      box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+      animation: mcp-pulse-orange 2s infinite;
+    }
+
+    &.unhealthy {
+      background-color: #ef4444;
+      box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+      animation: mcp-pulse-red 2s infinite;
+    }
+  }
+
+  // Jauge de latence
+  .mcp-latency-meter {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    padding: 0.2rem 0.6rem;
+    border-radius: 9999px;
+
+    &.fast {
+      background-color: rgba(16, 185, 129, 0.12);
+      color: #059669;
+    }
+
+    &.medium {
+      background-color: rgba(245, 158, 11, 0.12);
+      color: #d97706;
+    }
+
+    &.slow {
+      background-color: rgba(239, 68, 68, 0.12);
+      color: #dc2626;
+    }
+  }
+
+  // Blocs de code et configurations préformatées
+  .mcp-code-block {
+    position: relative;
+    background: var(--ds-surface-secondary, #0f172a);
+    color: #f8fafc;
+    border-radius: var(--ds-radius, 8px);
+    padding: 1rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    overflow-x: auto;
+    border: 1px solid var(--ds-border, #334155);
+
+    pre {
+      margin: 0;
+      background: transparent;
+      color: inherit;
+    }
+
+    .mcp-copy-btn {
+      position: absolute;
+      top: 0.65rem;
+      right: 0.65rem;
+      padding: 0.25rem 0.5rem;
+      font-size: 0.75rem;
+    }
+  }
+
+  // Cartes d'outils
+  .mcp-tool-card {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    border: 1px solid var(--ds-border, #e2e8f0);
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+  }
+
+  // Modals et tiroirs réactifs
+  .mcp-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+    z-index: 1050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+
+  .mcp-modal-card {
+    background: var(--ds-surface, #ffffff);
+    color: var(--ds-text-primary, #0f172a);
+    border-radius: var(--ds-radius, 10px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    max-width: 680px;
+    width: 100%;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+
+    .mcp-modal-body {
+      padding: 1.25rem;
+      overflow-y: auto;
+    }
+  }
+
+  // Toast de notification
+  .mcp-toast-container {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 1100;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+}
+
+// Keyframes
+@keyframes mcp-pulse-green {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+@keyframes mcp-pulse-orange {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(245, 158, 11, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+  }
+}
+
+@keyframes mcp-pulse-red {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}

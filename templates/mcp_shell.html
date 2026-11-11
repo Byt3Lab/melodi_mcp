@@ -1,0 +1,860 @@
+<div class="container-fluid py-3">
+  <!-- Point d'ancrage racine de la SPA MelodiJS -->
+  <div id="mcp-app">
+    <!-- Skeleton loader initial pour éviter tout saut de mise en page (Layout Shift) -->
+    <div class="ds-card p-4 shadow-sm mb-4">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="ds-skeleton-line" style="width: 280px; height: 32px;"></div>
+        <div class="ds-skeleton-line" style="width: 160px; height: 36px;"></div>
+      </div>
+      <div class="row g-3 mb-4">
+        <div class="col-md-3"><div class="ds-skeleton-line" style="height: 72px;"></div></div>
+        <div class="col-md-3"><div class="ds-skeleton-line" style="height: 72px;"></div></div>
+        <div class="col-md-3"><div class="ds-skeleton-line" style="height: 72px;"></div></div>
+        <div class="col-md-3"><div class="ds-skeleton-line" style="height: 72px;"></div></div>
+      </div>
+      <div class="ds-skeleton-line mb-3" style="height: 44px;"></div>
+      <div class="ds-skeleton-line mb-2" style="height: 38px;"></div>
+      <div class="ds-skeleton-line mb-2" style="height: 38px;"></div>
+      <div class="ds-skeleton-line mb-2" style="height: 38px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================================= -->
+<!-- VUE 1 : CATALOGUE DES OUTILS (ToolsCatalogView)                        -->
+<!-- ======================================================================= -->
+<template id="tpl-mcp-catalog">
+  <div class="mcp-catalog-view">
+    <!-- En-tête de page -->
+    {{ ds_page_header(
+      title=t('mcp_title', 'Model Context Protocol (MCP)'),
+      subtitle=t('mcp_subtitle', 'Gestion et catalogue des outils IA exposés par les modules MELODI'),
+      icon='smart_toy',
+      actions=[
+        ds_button(
+          label=t('tab_server', 'Supervision Serveur'),
+          variant='primary',
+          icon='dns',
+          extra_attrs='@click="$router.push(\'/server\')"'
+        ),
+        ds_button(
+          label=t('tab_tokens', 'Mes Tokens IA'),
+          variant='outline-primary',
+          icon='key',
+          extra_attrs='@click="$router.push(\'/tokens\')"'
+        )
+      ]
+    ) }}
+
+    <!-- KPIs réactifs -->
+    <div class="row g-3 mb-4">
+      <div class="col-md-3">
+        {{ ds_stat_card(
+          title=t('active_tools', 'Outils Actifs'),
+          value='[[ activeToolsCount ]]',
+          icon='smart_toy',
+          color='success',
+          subtitle=t('registered_capabilities', 'Capacités enregistrées')
+        ) }}
+      </div>
+      <div class="col-md-3">
+        {{ ds_stat_card(
+          title=t('total_tools', 'Total Outils'),
+          value='[[ totalToolsCount ]]',
+          icon='extension',
+          color='primary',
+          subtitle='Catalogue global'
+        ) }}
+      </div>
+      <div class="col-md-3">
+        {{ ds_stat_card(
+          title=t('catalog_revision', 'Révision du Catalogue'),
+          value='[[ catalogRevision.substring(0, 8) ]]',
+          icon='tag',
+          color='info',
+          subtitle=t('contract_version', 'Version') ~ ': v' ~ contract_version
+        ) }}
+      </div>
+      <div class="col-md-3">
+        {{ ds_stat_card(
+          title=t('api_endpoint', 'Point d\'accès API'),
+          value='/api/melodi_mcp',
+          icon='api',
+          color='secondary',
+          subtitle='REST Interne Sécurisé'
+        ) }}
+      </div>
+    </div>
+
+    <!-- Barre de recherche, filtres et bascule affichage -->
+    <div class="ds-card p-4 shadow-sm mb-4">
+      <div class="row g-3 align-items-center mb-3">
+        <div class="col-md-4">
+          <input type="search" class="ds-input w-100" v-model="searchQuery"
+                 placeholder="{{ t('search_tools_placeholder', 'Rechercher par nom, description, catégorie ou module...') }}">
+        </div>
+        <div class="col-md-2">
+          <select class="ds-select w-100" v-model="selectedCategory">
+            <option value="">{{ t('filter_all_categories', 'Toutes les catégories') }}</option>
+            <option v-for="cat in categories" :key="cat" :value="cat">[[ cat ]]</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <select class="ds-select w-100" v-model="selectedModule">
+            <option value="">{{ t('filter_all_modules', 'Tous les modules') }}</option>
+            <option v-for="mod in modules" :key="mod" :value="mod">[[ mod ]]</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <select class="ds-select w-100" v-model="selectedType">
+            <option value="">{{ t('filter_all_types', 'Tous les types') }}</option>
+            <option value="read_only">{{ t('read_only', 'Lecture seule') }}</option>
+            <option value="write">{{ t('write_operation', 'Écriture') }}</option>
+            <option value="destructive">{{ t('destructive', 'Destructif') }}</option>
+          </select>
+        </div>
+        <div class="col-md-2 d-flex justify-content-end gap-1">
+          <button type="button" class="ds-btn ds-btn-sm" :class="viewMode === 'table' ? 'ds-btn-primary' : 'ds-btn-secondary'" @click="setViewMode('table')" title="{{ t('view_table', 'Table') }}">
+            <img src="/static_base_icons?name=table_rows&fill=currentColor" style="width: 14px; height: 14px;" alt="">
+          </button>
+          <button type="button" class="ds-btn ds-btn-sm" :class="viewMode === 'cards' ? 'ds-btn-primary' : 'ds-btn-secondary'" @click="setViewMode('cards')" title="{{ t('view_cards', 'Cartes') }}">
+            <img src="/static_base_icons?name=grid_view&fill=currentColor" style="width: 14px; height: 14px;" alt="">
+          </button>
+        </div>
+      </div>
+
+      <!-- Vue Cartes -->
+      <div v-if="filteredTools.length > 0 && viewMode === 'cards'" class="row g-3">
+        <div class="col-md-6 col-lg-4" v-for="tool in filteredTools" :key="tool.name">
+          <div class="ds-card p-3 mcp-tool-card h-100 d-flex flex-column justify-content-between">
+            <div>
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="ds-badge ds-badge-primary">[[ tool.module ]]</span>
+                <span class="ds-badge" :class="tool.read_only ? 'ds-badge-success' : 'ds-badge-warning'">
+                  [[ tool.read_only ? '{{ t('read_only', 'Lecture') }}' : '{{ t('write_operation', 'Écriture') }}' ]]
+                </span>
+              </div>
+              <h5 class="fw-bold mb-1">[[ tool.name ]]</h5>
+              <p class="ds-text-sm text-muted mb-3 text-truncate-3">[[ tool.description ]]</p>
+            </div>
+            <div>
+              <div class="d-flex flex-wrap gap-1 mb-3">
+                <span v-for="p in tool.required_permissions" :key="p" class="ds-badge ds-badge-light font-monospace ds-text-xs">
+                  [[ p ]]
+                </span>
+                <span v-if="!tool.required_permissions || !tool.required_permissions.length" class="ds-text-xs text-muted">
+                  {{ t('public_authenticated', 'Authentifié') }}
+                </span>
+              </div>
+              <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+                <span class="ds-text-xs text-muted font-monospace">v[[ tool.version || '1.0.0' ]]</span>
+                <button type="button" class="ds-btn ds-btn-sm ds-btn-outline-primary" @click="openSchemaModal(tool)">
+                  <img src="/static_base_icons?name=code&fill=currentColor" style="width: 12px; height: 12px; vertical-align: middle;" alt="">
+                  <span>{{ t('view_schema', 'Schéma') }}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vue Tableau -->
+      <div v-else-if="filteredTools.length > 0" class="table-responsive">
+        <table class="ds-table w-100">
+          <thead>
+            <tr>
+              <th>{{ t('tool_name', 'Nom de l\'outil') }}</th>
+              <th>{{ t('module', 'Module') }}</th>
+              <th>{{ t('category', 'Catégorie') }}</th>
+              <th>{{ t('required_permissions_col', 'Permissions') }}</th>
+              <th>{{ t('type', 'Type') }}</th>
+              <th>{{ t('version', 'Version') }}</th>
+              <th class="text-end">{{ t('actions', 'Actions') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="tool in filteredTools" :key="tool.name">
+              <td>
+                <strong class="d-block">[[ tool.name ]]</strong>
+                <div class="ds-text-xs text-muted text-truncate" style="max-width: 320px;">[[ tool.description ]]</div>
+              </td>
+              <td><span class="ds-badge ds-badge-light">[[ tool.module ]]</span></td>
+              <td><span class="ds-badge ds-badge-secondary">[[ tool.category ]]</span></td>
+              <td>
+                <div v-if="tool.required_permissions && tool.required_permissions.length" class="d-flex flex-wrap gap-1">
+                  <code v-for="p in tool.required_permissions" :key="p" class="px-2 py-1 rounded bg-light border font-monospace ds-text-xs">[[ p ]]</code>
+                </div>
+                <span v-else class="ds-text-xs text-muted">{{ t('public_authenticated', 'Authentifié') }}</span>
+              </td>
+              <td>
+                <span class="ds-badge" :class="tool.read_only ? 'ds-badge-success' : 'ds-badge-warning'">
+                  [[ tool.read_only ? '{{ t('read_only', 'Lecture') }}' : '{{ t('write_operation', 'Écriture') }}' ]]
+                </span>
+                <span v-if="tool.destructive" class="ds-badge ds-badge-danger ms-1">{{ t('destructive', 'Destructif') }}</span>
+              </td>
+              <td><code>v[[ tool.version || '1.0.0' ]]</code></td>
+              <td class="text-end">
+                <button type="button" class="ds-btn ds-btn-sm ds-btn-outline-primary" @click="openSchemaModal(tool)">
+                  <img src="/static_base_icons?name=code&fill=currentColor" style="width: 12px; height: 12px; vertical-align: middle;" alt="">
+                  <span>{{ t('view_schema', 'Schéma') }}</span>
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- État vide -->
+      <div v-else class="py-5 text-center">
+        {{ ds_empty_state(
+          title=t('no_tools_found', 'Aucun outil MCP trouvé'),
+          description='Modifiez vos critères de recherche ou réinitialisez les filtres.',
+          icon='search_off'
+        ) }}
+      </div>
+    </div>
+
+    <!-- Modal Inspection de Schéma JSON -->
+    <div v-if="showSchemaModal" class="mcp-modal-backdrop" @click.self="closeSchemaModal">
+      <div class="mcp-modal-card">
+        <div class="p-3 border-bottom d-flex align-items-center justify-content-between">
+          <div class="d-flex align-items-center gap-2">
+            <img src="/static_base_icons?name=code&fill=%232563eb" style="width: 20px; height: 20px;" alt="">
+            <h5 class="fw-bold mb-0">[[ selectedToolForSchema ? selectedToolForSchema.name : '' ]] - {{ t('input_schema', 'Schéma d\'arguments') }}</h5>
+          </div>
+          <button type="button" class="ds-btn ds-btn-sm ds-btn-secondary" @click="closeSchemaModal">✕</button>
+        </div>
+        <div class="mcp-modal-body">
+          <p class="ds-text-sm text-muted mb-2">[[ selectedToolForSchema ? selectedToolForSchema.description : '' ]]</p>
+          <div class="mcp-code-block">
+            <button type="button" class="ds-btn ds-btn-sm ds-btn-outline-light mcp-copy-btn" @click="copySchemaJson">
+              <img src="/static_base_icons?name=content_copy&fill=white" style="width: 12px; height: 12px; vertical-align: middle;" alt="">
+              <span>Copier JSON</span>
+            </button>
+            <pre><code>[[ getFormattedSchema() ]]</code></pre>
+          </div>
+        </div>
+        <div class="p-3 border-top d-flex justify-content-end gap-2">
+          <button type="button" class="ds-btn ds-btn-secondary" @click="closeSchemaModal">{{ t('close', 'Fermer') }}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<!-- ======================================================================= -->
+<!-- VUE 2 : SUPERVISION SERVEUR (ServerSupervisorView)                     -->
+<!-- ======================================================================= -->
+<template id="tpl-mcp-server">
+  <div class="mcp-server-view">
+    {{ ds_page_header(
+      title=t('tab_server', 'Supervision Serveur MCP'),
+      subtitle='Supervision en direct, liaison réseau et commandes de pilotage de l\'instance melodi_mcp_server.',
+      icon='dns',
+      actions=[
+        ds_button(
+          label=t('server_ping_live', 'Tester la connexion'),
+          variant='primary',
+          icon='refresh',
+          extra_attrs='@click="onPing" :disabled="isPinging"'
+        ),
+        ds_button(
+          label=t('server_force_sync', 'Forcer la synchronisation'),
+          variant='secondary',
+          icon='sync',
+          extra_attrs='@click="onSync" :disabled="isSyncing || !isOnline"'
+        )
+      ]
+    ) }}
+
+    <!-- KPIs réactifs en direct -->
+    <div class="row g-3 mb-4">
+      <div class="col-md-3">
+        <div class="ds-card p-3 shadow-sm h-100">
+          <div class="ds-text-muted ds-text-xs mb-1">État du Serveur MCP</div>
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <span class="mcp-pulse-dot" :class="isOnline ? 'healthy' : 'unhealthy'"></span>
+            <strong class="ds-h4 mb-0" :class="isOnline ? 'text-success' : 'text-danger'">
+              [[ isOnline ? '{{ t('server_status_online', 'EN LIGNE') }}' : '{{ t('server_status_offline', 'HORS LIGNE') }}' ]]
+            </strong>
+          </div>
+          <div class="d-flex align-items-center justify-content-between ds-text-xs">
+            <span class="text-muted">{{ t('latency_label', 'Latence') }} :</span>
+            <span class="mcp-latency-meter" :class="latencyClass">[[ latencyMs ]] ms</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-3">
+        {{ ds_stat_card(
+          title='Outils Serveur MCP',
+          value='[[ isOnline ? serverToolsCount : \'-\' ]]',
+          icon='tune',
+          color='info',
+          subtitle='Sur ' ~ '[[ totalErpTools ]]' ~ ' outils ERP disponibles'
+        ) }}
+      </div>
+
+      <div class="col-md-3">
+        {{ ds_stat_card(
+          title='Uptime du Serveur',
+          value='[[ isOnline ? uptime : \'-\' ]]',
+          icon='schedule',
+          color='secondary',
+          subtitle='Version protocole: ' ~ '[[ version ]]'
+        ) }}
+      </div>
+
+      <div class="col-md-3">
+        <div class="ds-card p-3 shadow-sm h-100">
+          <div class="ds-text-muted ds-text-xs mb-1">Point de Contact MCP</div>
+          <div class="ds-text-xs font-monospace text-truncate fw-bold mb-1" :title="mcpServerUrl">
+            [[ mcpServerUrl ]]
+          </div>
+          <div class="ds-text-xs text-muted">
+            Transport : <strong>HTTP Streamable / SSE</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Détails de la passerelle & Snippet client IA -->
+    <div class="row g-4">
+      <!-- Colonne Détails Passerelle -->
+      <div class="col-md-6">
+        <div class="ds-card p-4 shadow-sm h-100">
+          <div class="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom">
+            <h5 class="fw-bold mb-0">Détails de la Liaison Passerelle</h5>
+            <span class="ds-badge ds-badge-primary">Architecture</span>
+          </div>
+
+          <table class="ds-table w-100">
+            <tbody>
+              <tr>
+                <td class="text-muted ds-text-xs fw-bold" style="width: 45%;">URL Base Serveur :</td>
+                <td class="ds-text-xs font-monospace">[[ serverBaseUrl ]]</td>
+              </tr>
+              <tr>
+                <td class="text-muted ds-text-xs fw-bold">Endpoint Santé :</td>
+                <td class="ds-text-xs font-monospace">[[ serverBaseUrl ]]/health</td>
+              </tr>
+              <tr>
+                <td class="text-muted ds-text-xs fw-bold">Endpoint MCP SSE :</td>
+                <td class="ds-text-xs font-monospace">[[ mcpServerUrl ]]</td>
+              </tr>
+              <tr>
+                <td class="text-muted ds-text-xs fw-bold">Webhook Révocation :</td>
+                <td class="ds-text-xs font-monospace">[[ serverBaseUrl ]]/api/mcp/tokens/revoke</td>
+              </tr>
+              <tr>
+                <td class="text-muted ds-text-xs fw-bold">Révision Serveur vs ERP :</td>
+                <td class="ds-text-xs font-monospace">[[ serverRevision.substring(0, 8) ]] / [[ catalogRevision.substring(0, 8) ]]</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="mt-4 pt-3 border-top d-flex gap-2 justify-content-end">
+            <button type="button" class="ds-btn ds-btn-sm ds-btn-outline-secondary" @click="goToManifest">
+              <img src="/static_base_icons?name=settings&fill=currentColor" style="width: 14px; height: 14px; vertical-align: middle;" alt="">
+              <span>{{ t('tab_manifest', 'Modifier les Clés de Sécurité') }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Colonne Configuration Client IA -->
+      <div class="col-md-6">
+        <div class="ds-card p-4 shadow-sm h-100">
+          <div class="d-flex align-items-center justify-content-between mb-2 pb-2 border-bottom">
+            <h5 class="fw-bold mb-0">Configuration Client IA</h5>
+            <span class="ds-badge ds-badge-info">Cursor / Claude / Copilot</span>
+          </div>
+          <p class="ds-text-xs text-muted mb-3">
+            Collez cet extrait dans votre fichier <code>.mcp.json</code> (Cursor, VS Code) pour connecter vos agents IA :
+          </p>
+
+          <div class="mcp-code-block mb-3">
+            <button type="button" class="ds-btn ds-btn-sm ds-btn-outline-light mcp-copy-btn" @click="copyClientSnippet">
+              <img src="/static_base_icons?name=content_copy&fill=white" style="width: 12px; height: 12px; vertical-align: middle;" alt="">
+              <span>{{ t('copy_config_json', 'Copier') }}</span>
+            </button>
+            <pre><code>[[ clientSnippet ]]</code></pre>
+          </div>
+
+          <div class="text-end">
+            <button type="button" class="ds-btn ds-btn-sm ds-btn-primary" @click="goToTokens">
+              <img src="/static_base_icons?name=key&fill=white" style="width: 12px; height: 12px; vertical-align: middle;" alt="">
+              <span>→ {{ t('generate_user_token_button', 'Générer mon Token MCP') }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<!-- ======================================================================= -->
+<!-- VUE 3 : MES TOKENS MCP (UserTokensView)                                -->
+<!-- ======================================================================= -->
+<template id="tpl-mcp-tokens">
+  <div class="mcp-tokens-view">
+    {{ ds_page_header(
+      title=t('user_tokens_title', 'Mes Tokens MCP (Agents IA)'),
+      subtitle=t('user_tokens_subtitle', 'Générez un jeton JWT personnel (valable entre 1h et 72h max) pour connecter vos agents IA.'),
+      icon='key',
+      actions=[
+        ds_button(
+          label=t('tab_catalog', 'Catalogue Outils'),
+          variant='secondary',
+          icon='extension',
+          extra_attrs='@click="$router.push(\'/\')"'
+        ),
+        ds_button(
+          label=t('tab_server', 'Supervision'),
+          variant='primary',
+          icon='dns',
+          extra_attrs='@click="$router.push(\'/server\')"'
+        )
+      ]
+    ) }}
+
+    <!-- Carte Contexte Utilisateur Connecté -->
+    <div class="ds-card p-4 shadow-sm mb-4 border-start border-4 border-primary">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div>
+          <span class="ds-text-xs text-muted text-uppercase fw-bold">{{ t('connected_user_label', 'Utilisateur en cours') }}</span>
+          <div class="d-flex align-items-center gap-2 mt-1">
+            <h4 class="fw-bold mb-0">[[ currentUsername ]]</h4>
+            <span v-if="isSudo" class="ds-badge ds-badge-danger">{{ t('sudo_all_permissions', 'Super-Administrateur (*)') }}</span>
+            <span v-else class="ds-badge ds-badge-primary">{{ t('standard_user_badge', 'Permissions actives') }}</span>
+          </div>
+        </div>
+        <div class="text-end">
+          <span class="ds-text-xs text-muted d-block mb-1">{{ t('inherited_permissions_label', 'Permissions vérifiées par MCP :') }}</span>
+          <div v-if="isSudo">
+            <code class="px-2 py-1 rounded bg-light border font-monospace ds-text-xs">* ({{ t('all_tools_allowed', 'Accès total') }})</code>
+          </div>
+          <div v-else-if="permissions.length" class="d-flex flex-wrap gap-1 justify-content-end">
+            <code v-for="p in permissions.slice(0, 6)" :key="p" class="px-2 py-1 rounded bg-light border font-monospace ds-text-xs">[[ p ]]</code>
+            <span v-if="permissions.length > 6" class="ds-badge ds-badge-secondary">+[[ permissions.length - 6 ]]</span>
+          </div>
+          <div v-else class="ds-text-xs text-muted">
+            {{ t('no_specific_permissions', 'Outils publics uniquement') }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alerte Nouveau Jeton Généré -->
+    <div v-if="newlyCreatedToken" class="ds-card p-4 shadow-sm mb-4 border border-success" style="background: rgba(16, 185, 129, 0.05);">
+      <h5 class="fw-bold text-success mb-1">✓ {{ t('token_generated_success', 'Jeton MCP personnel généré avec succès !') }}</h5>
+      <p class="ds-text-xs text-muted mb-3">{{ t('token_copy_warning', 'Attention : copiez immédiatement ce jeton. Il ne sera plus réaffiché en clair.') }}</p>
+
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <input type="text" class="ds-input font-monospace fw-bold w-100" style="max-width: 580px; background: #fff;" :value="newlyCreatedToken" readonly>
+        <button type="button" class="ds-btn ds-btn-success" @click="copyNewToken">
+          <img src="/static_base_icons?name=content_copy&fill=white" style="width: 14px; height: 14px; vertical-align: middle;" alt="">
+          <span>{{ t('copy_token', 'Copier mon jeton') }}</span>
+        </button>
+      </div>
+
+      <div class="p-3 bg-white border rounded">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <strong class="ds-text-xs">{{ t('mcp_config_title', 'Configuration .mcp.json prête à l\'emploi :') }}</strong>
+          <button type="button" class="ds-btn ds-btn-sm ds-btn-primary" @click="copyMcpConfig">
+            <img src="/static_base_icons?name=content_copy&fill=white" style="width: 12px; height: 12px; vertical-align: middle;" alt="">
+            <span>{{ t('copy_config_json', 'Copier la configuration JSON') }}</span>
+          </button>
+        </div>
+        <pre class="p-3 bg-light border rounded font-monospace ds-text-xs mb-0" style="max-height: 180px; overflow-y: auto;"><code>[[ mcpConfigSnippet ]]</code></pre>
+      </div>
+    </div>
+
+    <!-- Grille : Formulaire création + Liste des tokens -->
+    <div class="row g-4 mb-4">
+      <!-- Formulaire Création -->
+      <div class="col-md-4">
+        <div class="ds-card p-4 shadow-sm h-100">
+          <h5 class="fw-bold mb-2">{{ t('create_user_token_title', 'Créer un Jeton pour mon Agent') }}</h5>
+          <p class="ds-text-xs text-muted mb-3">{{ t('create_user_token_desc', 'Jeton JWT intégrant votre identité et vos autorisations.') }}</p>
+
+          <form @submit.prevent="handleCreateToken">
+            <div class="mb-3">
+              <label class="ds-label mb-1">{{ t('agent_name_label', 'Nom de votre Agent IA') }} *</label>
+              <input type="text" class="ds-input w-100" v-model="agentName" placeholder="{{ t('agent_name_placeholder', 'ex: Claude Desktop, Cursor, Mon Assistant') }}" required>
+            </div>
+
+            <div class="mb-4">
+              <label class="ds-label mb-1">{{ t('key_expires_in_hours_label', 'Durée de validité (1h à 72h max)') }}</label>
+              <select class="ds-select w-100" v-model="expiresInHours">
+                <option value="24">{{ t('duration_24h', '24 heures (Recommandé)') }}</option>
+                <option value="1">{{ t('duration_1h', '1 heure') }}</option>
+                <option value="8">{{ t('duration_8h', '8 heures') }}</option>
+                <option value="48">{{ t('duration_48h', '48 heures (2 jours)') }}</option>
+                <option value="72">{{ t('duration_72h', '72 heures (3 jours max)') }}</option>
+              </select>
+            </div>
+
+            <button type="submit" class="ds-btn ds-btn-primary w-100" :disabled="creating">
+              <img src="/static_base_icons?name=key&fill=white" style="width: 14px; height: 14px; vertical-align: middle;" alt="">
+              <span>[[ creating ? 'Génération...' : '{{ t('generate_user_token_button', 'Générer mon Jeton JWT') }}' ]]</span>
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Liste des Tokens Actifs -->
+      <div class="col-md-8">
+        <div class="ds-card p-0 shadow-sm overflow-hidden h-100">
+          <div class="p-3 border-bottom d-flex align-items-center justify-content-between bg-light">
+            <div class="d-flex align-items-center gap-2">
+              <h5 class="fw-bold mb-0">{{ t('my_active_tokens', 'Mes Tokens Utilisateur') }}</h5>
+              <span class="ds-badge ds-badge-primary">[[ tokens.length ]]</span>
+            </div>
+            <span class="ds-text-xs text-muted">{{ t('auth_header_info', 'Authorization: Bearer <jwt>') }}</span>
+          </div>
+
+          <div class="table-responsive">
+            <table class="ds-table w-100 mb-0">
+              <thead>
+                <tr>
+                  <th>{{ t('agent_col', 'Agent IA') }}</th>
+                  <th>{{ t('key_token', 'Token') }}</th>
+                  <th>{{ t('key_expires_at', 'Expiration') }}</th>
+                  <th>{{ t('status', 'Statut') }}</th>
+                  <th class="text-end">{{ t('actions', 'Actions') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="k in tokens" :key="k.id">
+                  <td>
+                    <strong>[[ k.name ]]</strong>
+                    <div class="ds-text-xs text-muted">{{ t('created_on', 'Créé le') }} [[ (k.created_at || '').substring(0, 10) ]]</div>
+                  </td>
+                  <td>
+                    <code class="px-2 py-1 rounded bg-light border font-monospace ds-text-xs">[[ k.key_prefix || (k.key ? k.key.substring(0, 8) + '...' : '-') ]]</code>
+                  </td>
+                  <td class="ds-text-xs font-monospace">
+                    [[ k.expires_at ? k.expires_at.substring(0, 16).replace('T', ' ') : '72h' ]]
+                  </td>
+                  <td>
+                    <span v-if="k.is_active" class="ds-badge ds-badge-success">{{ t('status_active', 'Actif') }}</span>
+                    <span v-else class="ds-badge ds-badge-secondary">{{ t('status_revoked', 'Suspendu') }}</span>
+                  </td>
+                  <td class="text-end">
+                    <div class="d-flex align-items-center justify-content-end gap-1">
+                      <button type="button" class="ds-btn ds-btn-sm" :class="k.is_active ? 'ds-btn-outline-warning' : 'ds-btn-outline-success'"
+                              @click="handleToggleToken(k)" :title="k.is_active ? 'Suspendre' : 'Activer'">
+                        [[ k.is_active ? '{{ t('deactivate', 'Suspendre') }}' : '{{ t('activate', 'Activer') }}' ]]
+                      </button>
+                      <button type="button" class="ds-btn ds-btn-sm ds-btn-outline-danger" @click="confirmDelete(k)" title="Supprimer">
+                        <img src="/static_base_icons?name=delete&fill=currentColor" style="width: 12px; height: 12px;" alt="">
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                <tr v-if="!tokens.length">
+                  <td colspan="5" class="py-5 text-center text-muted">
+                    {{ t('no_user_tokens_yet', 'Vous n\'avez pas encore généré de jeton pour connecter un agent IA.') }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Confirmation Suppression -->
+    <div v-if="showDeleteModal" class="mcp-modal-backdrop" @click.self="cancelDelete">
+      <div class="mcp-modal-card" style="max-width: 480px;">
+        <div class="p-3 border-bottom d-flex align-items-center justify-content-between">
+          <h5 class="fw-bold mb-0 text-danger">{{ t('delete_key', 'Supprimer le jeton MCP') }}</h5>
+          <button type="button" class="ds-btn ds-btn-sm ds-btn-secondary" @click="cancelDelete">✕</button>
+        </div>
+        <div class="mcp-modal-body py-3">
+          <p class="mb-0">
+            {{ t('delete_token_confirm', 'Êtes-vous certain de vouloir révoquer et supprimer définitivement ce jeton ?') }}
+            <strong>[[ tokenToDelete ? tokenToDelete.name : '' ]]</strong>
+          </p>
+        </div>
+        <div class="p-3 border-top d-flex justify-content-end gap-2">
+          <button type="button" class="ds-btn ds-btn-secondary" @click="cancelDelete">{{ t('close', 'Annuler') }}</button>
+          <button type="button" class="ds-btn ds-btn-danger" @click="executeDelete">{{ t('delete', 'Supprimer') }}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<!-- ======================================================================= -->
+<!-- VUE 4 : JOURNAL D'AUDIT (AuditLogsView)                                 -->
+<!-- ======================================================================= -->
+<template id="tpl-mcp-audit">
+  <div class="mcp-audit-view">
+    {{ ds_page_header(
+      title=t('audit_title', 'Journal d\'Audit des Exécutions'),
+      subtitle=t('audit_subtitle', 'Traçabilité et audit en temps réel de tous les outils appelés par les assistants IA.'),
+      icon='history',
+      actions=[
+        ds_button(
+          label=t('refresh', 'Actualiser'),
+          variant='primary',
+          icon='refresh',
+          extra_attrs='@click="onFilterChange"'
+        )
+      ]
+    ) }}
+
+    <!-- Barre de filtrage interactif -->
+    <div class="ds-card p-3 shadow-sm mb-4">
+      <div class="row g-3 align-items-center">
+        <div class="col-md-4">
+          <input type="search" class="ds-input w-100" v-model="searchQuery"
+                 placeholder="Rechercher par corrélation, utilisateur, outil...">
+        </div>
+        <div class="col-md-3">
+          <select class="ds-select w-100" v-model="selectedTool" @change="onFilterChange">
+            <option value="">{{ t('all_tools_filter', 'Tous les outils') }}</option>
+            <option v-for="tn in availableTools" :key="tn" :value="tn">[[ tn ]]</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <select class="ds-select w-100" v-model="selectedStatus" @change="onFilterChange">
+            <option value="">{{ t('all_statuses', 'Tous les statuts') }}</option>
+            <option value="SUCCESS">{{ t('status_success', 'Succès (SUCCESS)') }}</option>
+            <option value="REJECTED">{{ t('status_rejected', 'Rejeté (REJECTED)') }}</option>
+            <option value="TIMEOUT">{{ t('status_timeout', 'Timeout (TIMEOUT)') }}</option>
+            <option value="FAILED">{{ t('status_failed', 'Échoué (FAILED)') }}</option>
+          </select>
+        </div>
+        <div class="col-md-2 d-flex justify-content-end">
+          <button type="button" class="ds-btn ds-btn-secondary w-100" @click="resetFilters">
+            {{ t('reset_button', 'Réinitialiser') }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tableau d'audit -->
+    <div class="ds-card p-0 shadow-sm overflow-hidden mb-4">
+      <div class="table-responsive">
+        <table class="ds-table w-100 mb-0">
+          <thead>
+            <tr>
+              <th>{{ t('timestamp', 'Date & Heure') }}</th>
+              <th>{{ t('tool_name', 'Outil') }}</th>
+              <th>{{ t('module', 'Module') }}</th>
+              <th>{{ t('user', 'Utilisateur') }}</th>
+              <th>{{ t('duration', 'Durée') }}</th>
+              <th>{{ t('execution_status', 'Résultat') }}</th>
+              <th class="text-end">{{ t('details', 'Détails') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="log in filteredLogs" :key="log.id || log.correlation_id">
+              <td class="ds-text-xs font-monospace">[[ (log.created_at || '-').substring(0, 19).replace('T', ' ') ]]</td>
+              <td>
+                <strong class="d-block">[[ log.tool_name ]]</strong>
+                <span v-if="log.correlation_id" class="ds-text-xs text-muted font-monospace">ID: [[ log.correlation_id.substring(0, 8) ]]...</span>
+              </td>
+              <td><span class="ds-badge ds-badge-light">[[ log.module_name ]]</span></td>
+              <td class="ds-text-sm">[[ log.user_id || '-' ]]</td>
+              <td><code class="ds-text-xs">[[ log.duration_ms ]] ms</code></td>
+              <td>
+                <span v-if="log.status === 'SUCCESS'" class="ds-badge ds-badge-success">{{ t('status_success', 'Succès') }}</span>
+                <span v-else-if="log.status === 'REJECTED'" class="ds-badge ds-badge-warning">{{ t('status_rejected', 'Rejeté') }} ([[ log.error_code ]])</span>
+                <span v-else-if="log.status === 'TIMEOUT'" class="ds-badge ds-badge-danger">{{ t('status_timeout', 'Timeout') }}</span>
+                <span v-else class="ds-badge ds-badge-danger">{{ t('status_failed', 'Échoué') }} ([[ log.error_code ]])</span>
+              </td>
+              <td class="text-end">
+                <button type="button" class="ds-btn ds-btn-sm ds-btn-outline-primary" @click="openDetailModal(log)">
+                  <img src="/static_base_icons?name=visibility&fill=currentColor" style="width: 12px; height: 12px; vertical-align: middle;" alt="">
+                  <span>{{ t('details', 'Détails') }}</span>
+                </button>
+              </td>
+            </tr>
+            <tr v-if="!filteredLogs.length">
+              <td colspan="7" class="py-5 text-center text-muted">
+                {{ t('no_logs_found', 'Aucun enregistrement d\'audit ne correspond aux filtres.') }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Modal Détail d'Audit -->
+    <div v-if="showDetailModal" class="mcp-modal-backdrop" @click.self="closeDetailModal">
+      <div class="mcp-modal-card">
+        <div class="p-3 border-bottom d-flex align-items-center justify-content-between">
+          <h5 class="fw-bold mb-0">{{ t('execution_details', 'Détails de l\'Exécution') }}</h5>
+          <button type="button" class="ds-btn ds-btn-sm ds-btn-secondary" @click="closeDetailModal">✕</button>
+        </div>
+        <div class="mcp-modal-body" v-if="selectedLogDetail">
+          <table class="ds-table w-100 mb-3">
+            <tbody>
+              <tr><td class="text-muted fw-bold" style="width: 35%;">Outil :</td><td><strong>[[ selectedLogDetail.tool_name ]]</strong></td></tr>
+              <tr><td class="text-muted fw-bold">Module :</td><td><span class="ds-badge ds-badge-light">[[ selectedLogDetail.module_name ]]</span></td></tr>
+              <tr><td class="text-muted fw-bold">Utilisateur :</td><td>[[ selectedLogDetail.user_id || '-' ]]</td></tr>
+              <tr><td class="text-muted fw-bold">Agence (Branch) :</td><td>[[ selectedLogDetail.branch_id || '-' ]]</td></tr>
+              <tr><td class="text-muted fw-bold">ID Corrélation :</td><td><code class="font-monospace ds-text-xs">[[ selectedLogDetail.correlation_id || '-' ]]</code></td></tr>
+              <tr><td class="text-muted fw-bold">Durée :</td><td><code>[[ selectedLogDetail.duration_ms ]] ms</code></td></tr>
+              <tr><td class="text-muted fw-bold">Statut :</td><td>[[ selectedLogDetail.status ]]</td></tr>
+              <tr v-if="selectedLogDetail.error_code"><td class="text-muted fw-bold text-danger">Code Erreur :</td><td><strong class="text-danger">[[ selectedLogDetail.error_code ]]</strong></td></tr>
+              <tr v-if="selectedLogDetail.error_message"><td class="text-muted fw-bold text-danger">Message Erreur :</td><td><span class="text-danger">[[ selectedLogDetail.error_message ]]</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="p-3 border-top d-flex justify-content-end">
+          <button type="button" class="ds-btn ds-btn-secondary" @click="closeDetailModal">{{ t('close', 'Fermer') }}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<!-- ======================================================================= -->
+<!-- VUE 5 : MANIFESTE & CONFIGURATION (ManifestConfigView)                  -->
+<!-- ======================================================================= -->
+<template id="tpl-mcp-manifest">
+  <div class="mcp-manifest-view">
+    {{ ds_page_header(
+      title=t('tab_manifest', 'Configuration & Clés de Sécurité'),
+      subtitle=t('manifest_subtitle', 'Paramètres de liaison réseau, clés partagées et manifeste technique pour melodi_mcp_server.'),
+      icon='settings',
+      actions=[
+        ds_button(
+          label=t('tab_server', 'Supervision'),
+          variant='primary',
+          icon='dns',
+          extra_attrs='@click="$router.push(\'/server\')"'
+        )
+      ]
+    ) }}
+
+    <!-- Guide des 3 Clés de Sécurité -->
+    <div class="ds-card p-4 shadow-sm mb-4 border-start border-4 border-info bg-light">
+      <div class="d-flex align-items-center gap-2 mb-2">
+        <h5 class="fw-bold mb-0 text-primary">ℹ️ Guide d'Organisation des 3 Clés de Sécurité</h5>
+      </div>
+      <p class="ds-text-xs text-muted mb-3">
+        Architecture unifiée de sécurisation entre MELODI ERP, le serveur MCP et les assistants IA :
+      </p>
+
+      <div class="row g-3">
+        <div class="col-md-4">
+          <div class="p-3 bg-white rounded border h-100">
+            <strong class="ds-text-sm text-primary d-block mb-1">1. Clé Interne de Service</strong>
+            <div class="ds-text-xs font-monospace text-muted mb-2">MCP_INTERNAL_KEY</div>
+            <p class="ds-text-xs text-muted mb-0">Sécurise les requêtes directes entre melodi_mcp_server et MELODI (sync, exécutions).</p>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="p-3 bg-white rounded border h-100">
+            <strong class="ds-text-sm text-success d-block mb-1">2. Secret de Chiffrement JWT</strong>
+            <div class="ds-text-xs font-monospace text-muted mb-2">MCP_JWT_SECRET</div>
+            <p class="ds-text-xs text-muted mb-0">Permet à MELODI de signer les jetons des agents IA, et au serveur MCP de vérifier leur signature.</p>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="p-3 bg-white rounded border h-100">
+            <strong class="ds-text-sm text-warning d-block mb-1">3. Clé Infrastructure MCP</strong>
+            <div class="ds-text-xs font-monospace text-muted mb-2">MCP_SERVER_API_KEY</div>
+            <p class="ds-text-xs text-muted mb-0">Clé propre à l'instance de melodi_mcp_server injectée automatiquement dans les jetons JWT.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Deux colonnes de configuration -->
+    <div class="row g-4 mb-4">
+      <!-- Colonne Point d'accès MELODI ERP -->
+      <div class="col-md-6">
+        <div class="ds-card p-4 shadow-sm h-100">
+          <h5 class="fw-bold mb-3 pb-2 border-bottom">Point de Contact MELODI ERP</h5>
+
+          <div class="mb-3">
+            <label class="ds-label mb-1">{{ t('internal_api_url', 'URL de l\'API Interne') }}</label>
+            <div class="d-flex gap-2">
+              <input type="text" class="ds-input font-monospace w-100" :value="internalApiUrl" readonly>
+              <button type="button" class="ds-btn ds-btn-secondary" @click="copyInternalApiUrl">
+                <img src="/static_base_icons?name=content_copy&fill=currentColor" style="width: 14px; height: 14px;" alt="">
+              </button>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="ds-label mb-1">{{ t('update_internal_key_label', 'Clé Interne de Service') }}</label>
+            <div class="d-flex gap-2 mb-1">
+              <input type="text" class="ds-input font-monospace w-100" v-model="internalKeyInput">
+              <button type="button" class="ds-btn ds-btn-outline-primary" @click="generateKey('internal_key')">
+                {{ t('generate_random_key', 'Générer') }}
+              </button>
+            </div>
+            <button type="button" class="ds-btn ds-btn-sm ds-btn-primary mt-1" @click="saveInternalKey" :disabled="saving">
+              {{ t('save_changes', 'Enregistrer la clé') }}
+            </button>
+          </div>
+
+          <div class="mb-3 pt-3 border-top">
+            <label class="ds-label mb-1">Secret de Chiffrement JWT (HS256)</label>
+            <div class="d-flex gap-2 mb-1">
+              <input type="text" class="ds-input font-monospace w-100" v-model="jwtSecretInput">
+              <button type="button" class="ds-btn ds-btn-outline-primary" @click="generateKey('jwt_secret')">
+                {{ t('generate_random_key', 'Générer') }}
+              </button>
+            </div>
+            <button type="button" class="ds-btn ds-btn-sm ds-btn-success mt-1" @click="saveJwtSecret" :disabled="saving">
+              {{ t('save_changes', 'Enregistrer le secret JWT') }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Colonne Liaison Serveur MCP -->
+      <div class="col-md-6">
+        <div class="ds-card p-4 shadow-sm h-100">
+          <h5 class="fw-bold mb-3 pb-2 border-bottom">Liaison vers melodi_mcp_server</h5>
+
+          <div class="mb-3">
+            <label class="ds-label mb-1">URL d'écoute du Serveur MCP</label>
+            <input type="text" class="ds-input font-monospace w-100" v-model="serverUrlInput" placeholder="http://localhost:8765/mcp">
+          </div>
+
+          <div class="mb-4">
+            <label class="ds-label mb-1">Clé Infrastructure MCP (Optionnelle)</label>
+            <input type="text" class="ds-input font-monospace w-100" v-model="serverApiKeyInput" placeholder="mon-super-token-mcp-securise-2026">
+          </div>
+
+          <button type="button" class="ds-btn ds-btn-primary w-100" @click="saveServerConnection" :disabled="saving">
+            {{ t('save_changes', 'Enregistrer les paramètres de connexion') }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Manifeste JSON Officiel -->
+    <div class="ds-card p-4 shadow-sm">
+      <div class="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom">
+        <div>
+          <h5 class="fw-bold mb-0">Manifeste de Capacités (JSON)</h5>
+          <span class="ds-text-xs text-muted">Exposé publiquement via <code>/api/melodi_mcp/manifest</code></span>
+        </div>
+        <button type="button" class="ds-btn ds-btn-sm ds-btn-outline-primary" @click="copyManifest">
+          <img src="/static_base_icons?name=content_copy&fill=currentColor" style="width: 14px; height: 14px; vertical-align: middle;" alt="">
+          <span>Copier le Manifeste</span>
+        </button>
+      </div>
+
+      <div class="mcp-code-block">
+        <pre><code>[[ manifestJson ]]</code></pre>
+      </div>
+    </div>
+  </div>
+</template>
+
+<!-- Styles et script de démarrage de la SPA -->
+<link rel="stylesheet" href="/static/melodi_mcp/scss/mcp.css">
+<script type="module" src="/static/melodi_mcp/spa/app.js"></script>

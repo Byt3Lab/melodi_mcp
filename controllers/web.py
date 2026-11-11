@@ -13,30 +13,11 @@ class MCPWebController:
 
     @staticmethod
     async def admin_dashboard(request: Request, response: Response):
-        """Page principale d'administration et vue d'ensemble du catalogue MCP."""
-        registry = ToolRegistry.get_instance(app=request.app)
-        auditor = MCPAuditor(app=request.app)
-
-        tools = registry.list_tools(enabled_only=False, check_module_active=False)
-        active_tools = [t for t in tools if t.enabled and registry.is_module_active(t.module)]
-        recent_logs = await auditor.list_recent_executions(limit=30)
-
-        tools_data = []
-        for t in tools:
-            td = t.to_mcp_dict()
-            td["is_active"] = t.enabled and registry.is_module_active(t.module)
-            tools_data.append(td)
-
-        content = Component(module_name="melodi_mcp", name="dashboard", context={
-            "tools": tools_data,
-            "active_tools_count": len(active_tools),
-            "total_tools_count": len(tools),
-            "catalog_revision": registry.get_revision(),
+        """Page principale d'administration : sert la coquille unique de la SPA MelodiJS."""
+        content = Component(module_name="melodi_mcp", name="mcp_shell", context={
             "contract_version": CONTRACT_VERSION,
-            "recent_logs": recent_logs,
         })
-
-        page = Page("Catalogue MCP", admin_layout(content))
+        page = Page("Model Context Protocol (MCP)", admin_layout(content))
         return await response.render_page(page)
 
     @staticmethod
@@ -57,7 +38,7 @@ class MCPWebController:
         all_tools = registry.list_tools(enabled_only=False, check_module_active=False)
         available_tool_names = sorted([t.name for t in all_tools])
 
-        content = Component(module_name="melodi_mcp", name="audit", context={
+        content = Component(module_name="melodi_mcp", name="mcp_shell", context={
             "logs": logs,
             "available_tools": available_tool_names,
             "filter_tool": filter_tool or "",
@@ -144,7 +125,7 @@ class MCPWebController:
             }
         }
 
-        content = Component(module_name="melodi_mcp", name="manifest", context={
+        content = Component(module_name="melodi_mcp", name="mcp_shell", context={
             "contract_version": CONTRACT_VERSION,
             "catalog_revision": current_rev,
             "internal_key": internal_key,
@@ -271,7 +252,7 @@ class MCPWebController:
         filter_user_id = user_id if user_id != "system" else None
         keys = await api_key_service.list_keys(user_id=filter_user_id)
 
-        content = Component(module_name="melodi_mcp", name="api_keys", context={
+        content = Component(module_name="melodi_mcp", name="mcp_shell", context={
             "keys": keys,
             "current_user_id": user_id,
             "current_username": username,
@@ -483,7 +464,7 @@ class MCPWebController:
                 message = f"Échec de la connexion au serveur MCP ({server_base_url}) : {e}"
                 message_type = "danger"
 
-        content = Component(module_name="melodi_mcp", name="server_dashboard", context={
+        content = Component(module_name="melodi_mcp", name="mcp_shell", context={
             "mcp_server_url": mcp_server_url,
             "server_base_url": server_base_url,
             "is_online": is_online,

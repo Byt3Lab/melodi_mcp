@@ -51,20 +51,26 @@ class MelodiMCPModule(ApplicationModule):
         """Enregistre les routes Web d'administration et les routes API REST."""
         from .middlewares import mcp_auth_middleware
 
-        # 1. Routes d'administration Web
+        # 1. Routes d'administration Web (SPA unique + page OAuth dédiée)
         self.admin_router.add_route("", MCPWebController.admin_dashboard, methods=["GET"])
         self.admin_router.add_route("/", MCPWebController.admin_dashboard, methods=["GET"])
-        self.admin_router.add_route("/server", MCPWebController.admin_server_dashboard, methods=["GET", "POST"])
-        self.admin_router.add_route("/audit", MCPWebController.admin_audit, methods=["GET"])
-        self.admin_router.add_route("/keys", MCPWebController.admin_api_keys, methods=["GET", "POST"])
-        self.admin_router.add_route("/api-keys", MCPWebController.admin_api_keys, methods=["GET", "POST"])
-        self.admin_router.add_route("/manifest", MCPWebController.admin_manifest, methods=["GET", "POST"])
         self.admin_router.add_route("/oauth/authorize", MCPWebController.admin_oauth_authorize, methods=["GET", "POST"])
 
         # 2. Middleware d'authentification MCP sur le routeur API
         self.api_router.add_middleware(mcp_auth_middleware)
 
-        # 3. Routes API REST internes destinées à melodi_mcp_server et à la gestion des tokens
+        # 3. Routes API REST pour le fonctionnement de la SPA et de melodi_mcp_server
+        # Profil utilisateur et synthèse
+        self.api_router.add_route("/me", MCPAPIController.me, methods=["GET"])
+        self.api_router.add_route("/overview", MCPAPIController.overview, methods=["GET"])
+
+        # Supervision et pilotage en direct du serveur MCP
+        self.api_router.add_route("/server/status", MCPAPIController.server_status, methods=["GET"])
+        self.api_router.add_route("/server/sync", MCPAPIController.server_sync, methods=["POST"])
+        self.api_router.add_route("/server/config", MCPAPIController.get_server_config, methods=["GET"])
+        self.api_router.add_route("/server/config", MCPAPIController.update_server_config, methods=["POST"])
+        self.api_router.add_route("/server/config/generate", MCPAPIController.generate_server_key, methods=["POST"])
+
         # OAuth 2.0 Token Endpoint (PKCE)
         self.api_router.add_route("/oauth/token", MCPAPIController.oauth_token, methods=["POST"])
         # Endpoints de santé et manifeste
@@ -82,12 +88,14 @@ class MelodiMCPModule(ApplicationModule):
         self.api_router.add_route("/tools/<tool_name>/execute", MCPAPIController.execute_tool, methods=["POST"])
         self.api_router.add_route("/tools/execute", MCPAPIController.execute_tool, methods=["POST"])
 
-        # Gestion des tokens personnels (7 jours par défaut)
+        # Gestion des tokens personnels (validité 1h à 72h)
         self.api_router.add_route("/tokens", MCPAPIController.manage_tokens, methods=["GET", "POST"])
+        self.api_router.add_route("/tokens/<token_id>/toggle", MCPAPIController.toggle_token, methods=["POST"])
         self.api_router.add_route("/tokens/<token_id>", MCPAPIController.delete_token, methods=["DELETE"])
 
         # Journaux d'audit
         self.api_router.add_route("/audit-logs", MCPAPIController.audit_logs, methods=["GET"])
+        self.api_router.add_route("/internal/audit-logs", MCPAPIController.audit_logs, methods=["GET"])
 
     def _register_actions(self):
         """Enregistre les actions exposées aux autres modules MELODI."""
@@ -107,11 +115,11 @@ class MelodiMCPModule(ApplicationModule):
             url="/admin/melodi_mcp",
             priority=85,
             children=[
-                {"label": "Catalogue des Outils", "icon": "name=extension&fill=white", "url": "/admin/melodi_mcp"},
-                {"label": "Serveur MCP (Dashboard)", "icon": "name=dns&fill=white", "url": "/admin/melodi_mcp/server"},
-                {"label": "Mes Tokens MCP", "icon": "name=key&fill=white", "url": "/admin/melodi_mcp/keys"},
-                {"label": "Journal d'Audit", "icon": "name=history&fill=white", "url": "/admin/melodi_mcp/audit"},
-                {"label": "Serveur & Manifeste", "icon": "name=cloud_sync&fill=white", "url": "/admin/melodi_mcp/manifest"},
+                {"label": "Catalogue des Outils", "icon": "name=extension&fill=white", "url": "/admin/melodi_mcp#/"},
+                {"label": "Serveur MCP (Dashboard)", "icon": "name=dns&fill=white", "url": "/admin/melodi_mcp#/server"},
+                {"label": "Mes Tokens MCP", "icon": "name=key&fill=white", "url": "/admin/melodi_mcp#/tokens"},
+                {"label": "Journal d'Audit", "icon": "name=history&fill=white", "url": "/admin/melodi_mcp#/audit"},
+                {"label": "Serveur & Manifeste", "icon": "name=cloud_sync&fill=white", "url": "/admin/melodi_mcp#/manifest"},
             ]
         )
 

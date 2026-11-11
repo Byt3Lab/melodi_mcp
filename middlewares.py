@@ -42,7 +42,7 @@ async def resolve_mcp_user(request: Request, service_cls=None) -> Optional[dict[
                 user["permissions"] = list(permissions_map.get(user["user_id"], []))
             return user
 
-    # 2. Extraction des en-têtes d'authentification
+    # 2. Extraction des en-têtes et query params d'authentification
     headers = getattr(request, "headers", None)
     if headers is None or not hasattr(headers, "get"):
         headers = {}
@@ -55,14 +55,6 @@ async def resolve_mcp_user(request: Request, service_cls=None) -> Optional[dict[
             val = headers.get(name.lower())
         return val.strip() if isinstance(val, str) else ""
 
-    auth_header = _get_header("Authorization")
-    internal_key_header = _get_header("X-Internal-MCP-Key")
-    melodi_user_id_header = (
-        _get_header("X-Melodi-User-ID")
-        or _get_header("X-Melodi-User-Id")
-        or _get_header("X-Melodi-User")
-    )
-
     query = getattr(request, "query", None)
     if query is None or not hasattr(query, "get"):
         query = {}
@@ -73,10 +65,24 @@ async def resolve_mcp_user(request: Request, service_cls=None) -> Optional[dict[
         val = query.get(name)
         return val.strip() if isinstance(val, str) else ""
 
+    auth_header = _get_header("Authorization")
+    internal_key_header = (
+        _get_header("X-MCP-API-KEY")
+        or _get_header("X-MCP-API-Key")
+        or _get_header("X-Internal-MCP-Key")
+        or _get_query("mcp_api_key")
+    )
+    melodi_user_id_header = (
+        _get_header("X-Melodi-User-ID")
+        or _get_header("X-Melodi-User-Id")
+        or _get_header("X-Melodi-User")
+    )
+
     user_key_header = (
         _get_header("X-User-MCP-Key")
         or _get_header("X-MCP-User-Key")
         or _get_header("X-MCP-User-Token")
+        or _get_query("user_mcp_api_key")
         or _get_query("user_key")
         or _get_query("user_token")
     )
