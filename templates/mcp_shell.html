@@ -856,5 +856,5 @@
 </template>
 
 <!-- Styles et script de démarrage de la SPA -->
-<link rel="stylesheet" href="/static/melodi_mcp/scss/mcp.css">
-<script type="module" src="/static/melodi_mcp/spa/app.js"></script>
+<link rel="stylesheet" href="{{ _url('static', {'module': 'melodi_mcp', 'path': ['scss', 'mcp.css']}) }}">
+<script type="module" src="{{ _url('static', {'module': 'melodi_mcp', 'path': ['spa', 'app.js']}) }}"></script>
